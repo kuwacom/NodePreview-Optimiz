@@ -343,6 +343,26 @@ def node_groups_to_script(node_groups):
     return "\n".join(script), images_to_load, images_to_link, group_hashes
 
 
+def collect_used_node_groups(node_trees):
+    """
+    ### collect_used_node_groups
+    指定したノードツリーからグループノードを再帰的にたどり、参照されているノードグループを集める
+
+    @param node_trees - 起点となるノードツリー（編集中の階層全体を渡す）
+    @returns 参照されているノードグループの集合
+    """
+    # 全グループを毎回変換すると大きなファイルで描画が極端に重くなるため、実際に使われるものだけに絞る
+    used_groups = set()
+    pending = list(node_trees)
+    while pending:
+        node_tree = pending.pop()
+        for node in node_tree.nodes:
+            if is_group_node(node) and node.node_tree and node.node_tree not in used_groups:
+                used_groups.add(node.node_tree)
+                pending.append(node.node_tree)
+    return used_groups
+
+
 def _attributes_to_script(attributes, source, target_identifier, script):
     for attr in attributes:
         value, success = _property_to_string(getattr(source, attr))

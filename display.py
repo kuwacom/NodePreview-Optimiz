@@ -88,6 +88,8 @@ class WatcherThread(threading.Thread):
                         if job_timestamp < last_timestamp:
                             # Force re-sending the job if the last job didn't go through
                             del cached_nodes[node_key]
+                            # 再送は変換処理の中で行われるため、スキップされないよう更新を要求する
+                            request_update()
                     except KeyError:
                         pass
 
@@ -112,6 +114,91 @@ background_process: Optional[subprocess.Popen] = None
 listener: Optional[Listener] = None
 connection: Optional[Connection] = None
 watcher_thread: Optional[WatcherThread] = None
+
+# 変更の無い再描画（パン・ズーム・マウス移動）で重い変換処理を丸ごと省くための状態
+update_generation = 0  # ノード等に変更が入るたびに増える世代番号
+processed_state = {}  # node_tree : (update_generation, signature, 処理済みパート数)
+group_script_cache = {}  # frozenset(ノードグループ名) : node_groups_to_script の結果
+# この型の ID が更新されたときだけサムネイルが変わり得る
+WATCHED_ID_TYPES = (bpy.types.Material, bpy.types.World, bpy.types.Light, bpy.types.NodeTree, bpy.types.Image)
+
+
+def request_update():
+    """
+    ### request_update
+    次の再描画でサムネイル用スクリプトの再変換を行わせる（別スレッドから呼んでも良い）
+    """
+    global update_generation
+    update_generation += 1
+
+
+def invalidate_caches():
+    """
+    ### invalidate_caches
+    ノードグループ変換のキャッシュを破棄し、再変換を要求する
+    """
+    group_script_cache.clear()
+    request_update()
+
+
+def get_group_script(node_tree_hierarchy):
+    """
+    ### get_group_script
+    編集中の階層から参照されるノードグループだけを変換し、結果をキャッシュする
+
+    @param node_tree_hierarchy - 編集中のノードツリー階層
+    @returns node_groups_to_script の戻り値
+    """
+    used_groups = node_converter.collect_used_node_groups(node_tree_hierarchy)
+    cache_key = frozenset(group.name_full for group in used_groups)
+    try:
+        return group_script_cache[cache_key]
+    except KeyError:
+        result = node_converter.node_groups_to_script(used_groups)
+        group_script_cache[cache_key] = result
+        return result
+
+
+def make_update_signature(context, node_tree, node_tree_hierarchy, node_tree_owner, preferences):
+    """
+    ### make_update_signature
+    depsgraph の通知が来ない変更（設定・エンジン・ノード毎のプレビュー設定など）を検出するための値を作る
+
+    @returns 前回と比較するためのタプル
+    """
+    node_settings = []
+    for node in node_tree.nodes:
+        props = getattr(node, "node_preview", None)
+        if props is None:
+            continue
+        node_settings.append((node.name, props.enabled, props.enabled_modified, props.ignore_scale,
+                              props.auto_choose_output, props.output_index, props.preview_object,
+                              props.force_update_counter))
+
+    # Group Input の解決に親ツリーのアクティブノード（グループのインスタンス）が使われるため含める
+    parent_active_nodes = tuple(tree.nodes.active.name if tree.nodes.active else None
+                                for tree in node_tree_hierarchy[:-1])
+
+    return (
+        node_tree_owner.as_pointer() if node_tree_owner else None,
+        tuple(tree.as_pointer() for tree in node_tree_hierarchy),
+        parent_active_nodes,
+        context.scene.render.engine,
+        preferences.previews_enabled_by_default,
+        preferences.thumb_resolution,
+        preferences.background_pattern,
+        tuple(preferences.background_color_1),
+        tuple(preferences.background_color_2),
+        tuple(node_settings),
+    )
+
+
+@persistent
+def depsgraph_update_post(scene, depsgraph):
+    for update in depsgraph.updates:
+        if isinstance(update.id, WATCHED_ID_TYPES):
+            invalidate_caches()
+            return
 
 
 UNSUPPORTED_NODES = {
@@ -408,9 +495,19 @@ def handler():
     old_blend_mode = gpu.state.blend_get()
     gpu.state.blend_set("ALPHA")
 
-    group_script, group_images_to_load, group_images_to_link, group_hashes = node_converter.node_groups_to_script(bpy.data.node_groups)
     # node_tree_owner is the material, world etc. that contains the node_tree
     node_tree_owner = context.space_data.id
+
+    # 50 ノード以上のツリーは前半/後半を交互に処理するため、2 回処理して初めて全ノードが最新になる
+    parts_needed = 1 if len(sorted_nodes) < 50 else 2
+    signature = make_update_signature(context, node_tree, node_tree_hierarchy, node_tree_owner, preferences)
+    generation = update_generation
+    last_state = processed_state.get(node_tree)
+    state_matches = last_state is not None and last_state[0] == generation and last_state[1] == signature
+    needs_conversion = not (state_matches and last_state[2] >= parts_needed)
+
+    if needs_conversion:
+        group_script, group_images_to_load, group_images_to_link, group_hashes = get_group_script(node_tree_hierarchy)
 
     # socket.links is a very expensive property to access, so we cache the link types we are interested in most in this dict
     incoming_links = {link.to_socket: link for link in node_tree.links}
@@ -436,7 +533,9 @@ def handler():
     #####################
     # Update Thumbnails #
     #####################
-    if not context.screen.is_animation_playing or preferences.update_during_animation_playback:
+    if needs_conversion and (not context.screen.is_animation_playing or preferences.update_during_animation_playback):
+        processed_state[node_tree] = (generation, signature, last_state[2] + 1 if state_matches else 1)
+
         for node in sorted_nodes[start:end]:
             if not is_node_supported(node, context.scene.render.engine):
                 continue
@@ -596,6 +695,8 @@ def free():
     cached_nodes.clear()
     update_first_part.clear()
     thumbnails.clear()
+    processed_state.clear()
+    invalidate_caches()
 
 
 def stop_threads_and_process():
@@ -778,6 +879,7 @@ def display_register():
     bpy.app.handlers.load_pre.append(load_pre)
     bpy.app.handlers.load_post.append(load_post)
     bpy.app.handlers.save_post.append(save_post)
+    bpy.app.handlers.depsgraph_update_post.append(depsgraph_update_post)
 
     process_starter = threading.Thread(target=start_background_process)
     # In case the background process throws an exception, the process_starter thread could get stuck
@@ -795,5 +897,6 @@ def display_unregister():
     bpy.app.handlers.load_pre.remove(load_pre)
     bpy.app.handlers.load_post.remove(load_post)
     bpy.app.handlers.save_post.remove(save_post)
+    bpy.app.handlers.depsgraph_update_post.remove(depsgraph_update_post)
     stop_threads_and_process()
     free()
