@@ -67,6 +67,23 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         name="Vertical Offset", default=5, min=0, max=50, description="Vertical offset of the thumbnails from the node"
     )
 
+    def update_max_background_processes(self, context):
+        # 裏プロセスは UI のある Blender でだけ動かすため、設定画面から変更された時にだけ読み込む
+        from . import background_client
+
+        background_client.restart_processes()
+
+    max_background_processes: IntProperty(
+        name="Max Background Processes",
+        default=2,
+        min=1,
+        soft_max=4,
+        max=8,
+        update=update_max_background_processes,
+        description="Maximum number of Blender processes that render thumbnails in parallel. "
+        "Higher values update faster, but use more memory",
+    )
+
     thumb_resolution: IntProperty(
         name="Thumbnail Resolution",
         default=150,
@@ -129,6 +146,8 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         row.prop(self, "thumb_scale")
         row.prop(self, "thumb_z_offset")
         row.prop(self, "thumb_resolution")
+
+        layout.prop(self, "max_background_processes")
 
         row = layout.row()
         row.label(text="Background:")

@@ -54,6 +54,12 @@ TRANSLATIONS = {
         DEFAULT,
         "Higher resolutions preserve fine detail in textures better, but lead to slower updates",
     ): "高くするとテクスチャの細部まで見えますが、更新が遅くなります",
+    (DEFAULT, "Max Background Processes"): "裏プロセスの最大数",
+    (
+        DEFAULT,
+        "Maximum number of Blender processes that render thumbnails in parallel. "
+        "Higher values update faster, but use more memory",
+    ): "サムネイルを並行してレンダリングする Blender の最大数。増やすと更新が速くなりますが、メモリを多く使います",
     (DEFAULT, "Checkerboard Pattern"): "チェッカー柄",
     (
         DEFAULT,

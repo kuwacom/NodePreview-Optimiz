@@ -29,8 +29,8 @@ import tempfile
 import threading
 from collections import OrderedDict
 from multiprocessing import current_process
-from multiprocessing.connection import Connection, Listener
-from time import sleep, time
+from multiprocessing.connection import Listener
+from time import time
 
 import bpy
 from bpy.app.handlers import persistent
@@ -56,96 +56,202 @@ temp_dir = os.path.join(tempfile.gettempdir(), f"{TEMP_DIR_PREFIX}{os.getpid()}"
 images_failed_to_link_lock = threading.Lock()
 images_failed_to_link = set()
 
-background_process_ready = False
-background_process: subprocess.Popen | None = None
-listener: Listener | None = None
-connection: Connection | None = None
-
 # 送信待ちのジョブ（node_key : job）。同じノードは最新のジョブだけを残し、最後に追加したものから送る
 pending_jobs = OrderedDict()
-# 裏プロセスが処理中のジョブがあるか。処理中は次のジョブを送らず、送信待ちの中で古いジョブを上書きさせる
-background_process_busy = False
-# 描画ハンドラー（メインスレッド）と WatcherThread の両方から送信するため、送信と送信待ちの操作をまとめて守る
+# 描画ハンドラー（メインスレッド）と各裏プロセスの受信スレッドから送信するため、送信と送信待ちの操作をまとめて守る
 send_lock = threading.RLock()
 # 最後の描画で画面内にあったノード。これらのジョブを優先して送る
 visible_node_keys = frozenset()
+# 裏プロセスに伝える .blend のパス。bpy.data はメインスレッドでしか触らないため、ここに写しておく
+current_blend_abspath = ""
+
+# 起動中の裏プロセス。ジョブが溜まった時だけ、設定の最大数まで増やす
+processes = []
 
 
-class WatcherThread(threading.Thread):
+class BackgroundProcess:
     """
-    # WatcherThread
-    裏プロセスからのメッセージ（準備完了・レンダリング結果など）を受け取り続けるスレッド
+    # BackgroundProcess
+    サムネイルをレンダリングする裏プロセス 1 つ分の起動・通信・状態
+
+    ### 特徴
+    - 1 度に 1 件のジョブだけを処理させ、終わったら次を送る
+    - 準備完了の通知を受けたら、ジョブより先に .blend のパスを送る
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, daemon=True, **kwargs)
+    def __init__(self):
+        self.process: subprocess.Popen | None = None
+        self.listener: Listener | None = None
+        self.connection = None
+        self.ready = False
+        # 処理中のジョブの node_key（空いていれば None）
+        self.busy_node_key = None
         self._stop_event = threading.Event()
 
+    def start(self):
+        # In case the background process throws an exception, the process_starter thread could get stuck
+        # on listener.accept(). Enable the daemon flag to make sure the Blender process doesn't hang after
+        # quit when this happens.
+        threading.Thread(target=self._start_and_watch, daemon=True).start()
+
+    def send(self, tag, data=None):
+        with send_lock:
+            self.connection.send((tag, data))
+
     def stop(self):
+        self.ready = False
         self._stop_event.set()
 
-    def stopped(self):
-        return self._stop_event.is_set()
+        if self.connection:
+            try:
+                self.send(messages.STOP)
+            except OSError:
+                # 裏プロセスが既に終了している
+                pass
+            self.connection.close()
+            self.connection = None
 
-    def run(self):
-        while not self.stopped():
-            if connection.poll(timeout=0.05):
-                msg = connection.recv()
-                tag, data = msg
+        if self.listener:
+            self.listener.close()
+            self.listener = None
 
-                if tag == messages.BACKGROUND_PROCESS_READY:
-                    global background_process_ready
-                    background_process_ready = True
-                    # Force one refresh to render all nodes that are currently visible
-                    force_node_editor_draw()
-                    dispatch_jobs()
-                elif tag == messages.JOB_DONE:
-                    node_key, result_array, thumb_resolution, job_timestamp, error_message, full_error_log = data
+        if self.process:
+            try:
+                self.process.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.communicate()
+                addon_print("Background Process was killed after timeout.")
 
-                    if full_error_log:
-                        addon_print(full_error_log)
+            self.process = None
 
-                    preview_cache.thumbnails[node_key] = Thumbnail(
-                        result_array, thumb_resolution, thumb_resolution, THUMB_CHANNEL_COUNT, error_message
-                    )
+    def _start_and_watch(self):
+        authkey = current_process().authkey
 
-                    try:
-                        last_timestamp = preview_cache.cached_nodes[node_key][1]
-                        if job_timestamp < last_timestamp:
-                            # Force re-sending the job if the last job didn't go through
-                            del preview_cache.cached_nodes[node_key]
-                            # 再送は変換処理の中で行われるため、スキップされないよう更新を要求する
-                            update_tracker.request_update()
-                    except KeyError:
-                        pass
+        port = 6000
+        while port < 10000:
+            try:
+                self.listener = Listener(("localhost", port), authkey=authkey)
+                break
+            except OSError as error:
+                if (
+                    (platform.system() == "Windows" and error.errno == 10048)
+                    or (platform.system() == "Linux" and error.errno == 98)
+                    or (platform.system() == "Darwin" and error.errno == 48)
+                ):
+                    # Windows: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
+                    # Linux: [Errno 98] Address already in use
+                    # macOS: [Errno 48] Address already in use
+                    port += 1
+                else:
+                    raise
 
-                    force_node_editor_draw()
-                    on_job_finished()
-                elif tag == messages.JOB_SKIPPED:
-                    on_job_finished()
-                elif tag == messages.IMAGES_FAILED_TO_LINK:
-                    with images_failed_to_link_lock:
-                        images_failed_to_link.update(data)
+        # import 文ではフォルダ名にハイフンなどを含むと構文エラーになるため、importlib で読み込む
+        worker_module = f"{ADDON_PACKAGE}.src.background_worker"
+        process_args = [
+            bpy.app.binary_path,
+            "--factory-startup",
+            "--addons",
+            ADDON_PACKAGE,
+            "-b",  # Run in background without UI
+            PREVIEW_SCENE_PATH,
+            "--python-expr",
+            f"import importlib; importlib.import_module({worker_module!r}).run({port}, {authkey})",
+        ]
+
+        env_copy = os.environ.copy()
+
+        for custom_script_dir in bpy.context.preferences.filepaths.script_directories:
+            # Only use the custom script dir if the addon is installed there. If BLENDER_USER_SCRIPTS is set, but the addon
+            # is installed in the default location, the background process will fail to import the addon.
+            if os.path.exists(os.path.join(custom_script_dir.directory, "addons", ADDON_PACKAGE)):
+                env_copy["BLENDER_USER_SCRIPTS"] = custom_script_dir.directory
+                break
+
+        if get_preferences().enable_debug_output:
+            self.process = subprocess.Popen(process_args, env=env_copy)
+        else:
+            self.process = subprocess.Popen(
+                process_args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, env=env_copy
+            )
+
+        self.connection = self.listener.accept()
+        self._watch()
+
+    def _watch(self):
+        """裏プロセスからのメッセージ（準備完了・レンダリング結果など）を受け取り続ける"""
+        while not self._stop_event.is_set():
+            try:
+                if not self.connection.poll(timeout=0.05):
+                    continue
+                tag, data = self.connection.recv()
+            except (OSError, EOFError, AttributeError):
+                # 停止処理で接続が閉じられた、または裏プロセスが終了した
+                self.ready = False
+                return
+
+            if tag == messages.BACKGROUND_PROCESS_READY:
+                # ジョブより先に届かないと全てのジョブが古い .blend 用として捨てられるため、最初に送る
+                self.send(messages.NEW_BLEND_ABSPATH, current_blend_abspath)
+                self.ready = True
+                # Force one refresh to render all nodes that are currently visible
+                force_node_editor_draw()
+                dispatch_jobs()
+            elif tag == messages.JOB_DONE:
+                on_job_done(data)
+                self._finish_job()
+            elif tag == messages.JOB_SKIPPED:
+                self._finish_job()
+            elif tag == messages.IMAGES_FAILED_TO_LINK:
+                with images_failed_to_link_lock:
+                    images_failed_to_link.update(data)
+
+    def _finish_job(self):
+        with send_lock:
+            self.busy_node_key = None
+        dispatch_jobs()
 
 
-watcher_thread: WatcherThread | None = None
+def on_job_done(data):
+    node_key, result_array, thumb_resolution, job_timestamp, error_message, full_error_log = data
+
+    if full_error_log:
+        addon_print(full_error_log)
+
+    preview_cache.thumbnails[node_key] = Thumbnail(
+        result_array, thumb_resolution, thumb_resolution, THUMB_CHANNEL_COUNT, error_message
+    )
+
+    try:
+        last_timestamp = preview_cache.cached_nodes[node_key][1]
+        if job_timestamp < last_timestamp:
+            # Force re-sending the job if the last job didn't go through
+            del preview_cache.cached_nodes[node_key]
+            # 再送は変換処理の中で行われるため、スキップされないよう更新を要求する
+            update_tracker.request_update()
+    except KeyError:
+        pass
+
+    force_node_editor_draw()
 
 
 def is_ready():
     """
     ### is_ready
-    @returns 裏プロセスがジョブを受け付けられる状態なら True
+    @returns ジョブを受け付けられる裏プロセスが 1 つ以上あれば True
     """
-    return background_process_ready
+    return any(process.ready for process in processes)
 
 
-def send_message(tag, data=None):
+def broadcast(tag, data=None):
     """
-    ### send_message
-    裏プロセスにメッセージを送る（どのスレッドから呼んでも良い）
+    ### broadcast
+    準備のできている全ての裏プロセスにメッセージを送る
     """
     with send_lock:
-        connection.send((tag, data))
+        for process in processes:
+            if process.ready:
+                process.send(tag, data)
 
 
 def submit_jobs(jobs):
@@ -163,22 +269,46 @@ def submit_jobs(jobs):
     dispatch_jobs()
 
 
+def _pick_job(in_flight):
+    candidates = [key for key in reversed(pending_jobs) if key not in in_flight]
+    if not candidates:
+        return None
+    # 同じノードを 2 つの裏プロセスで同時に描くと、同じファイルに書き込んでしまうため避ける
+    node_key = next((key for key in candidates if key in visible_node_keys), candidates[0])
+    return pending_jobs.pop(node_key)
+
+
 def dispatch_jobs():
     """
     ### dispatch_jobs
-    裏プロセスが空いていれば、送信待ちのジョブを 1 件送る
+    空いている裏プロセスに送信待ちのジョブを送る。全て埋まっていれば、最大数まで裏プロセスを増やす
     """
-    global background_process_busy
     with send_lock:
-        if not background_process_ready or background_process_busy or not pending_jobs:
-            return
-        node_key = next((key for key in reversed(pending_jobs) if key in visible_node_keys), None)
-        if node_key is None:
-            _, job = pending_jobs.popitem(last=True)
-        else:
-            job = pending_jobs.pop(node_key)
-        background_process_busy = True
-        send_message(messages.NEW_JOB, job)
+        in_flight = {process.busy_node_key for process in processes if process.busy_node_key}
+        for process in processes:
+            if not process.ready or process.busy_node_key is not None:
+                continue
+            job = _pick_job(in_flight)
+            if job is None:
+                break
+            process.busy_node_key = job[0]
+            in_flight.add(job[0])
+            process.send(messages.NEW_JOB, job)
+
+        starting = sum(1 for process in processes if not process.ready)
+        waiting = len(pending_jobs) - len(in_flight & pending_jobs.keys())
+        if waiting > starting and len(processes) < get_max_processes():
+            start_process()
+
+
+def get_max_processes():
+    return get_preferences().max_background_processes
+
+
+def start_process():
+    process = BackgroundProcess()
+    processes.append(process)
+    process.start()
 
 
 def set_visible_node_keys(node_keys):
@@ -192,48 +322,24 @@ def set_visible_node_keys(node_keys):
     visible_node_keys = frozenset(node_keys)
 
 
-def on_job_finished():
-    global background_process_busy
-    with send_lock:
-        background_process_busy = False
-    dispatch_jobs()
-
-
-def clear_pending_jobs():
-    global background_process_busy
+def stop_threads_and_process():
     with send_lock:
         pending_jobs.clear()
-        background_process_busy = False
+        stopping = list(processes)
+        processes.clear()
+    for process in stopping:
+        process.stop()
 
 
-def stop_threads_and_process():
-    global watcher_thread, connection, listener, background_process, background_process_ready
-    background_process_ready = False
-    clear_pending_jobs()
-
-    if watcher_thread:
-        watcher_thread.stop()
-        watcher_thread.join(timeout=0.2)
-        watcher_thread = None
-
-    if connection:
-        send_message(messages.STOP)
-        connection.close()
-        connection = None
-
-    if listener:
-        listener.close()
-        listener = None
-
-    if background_process:
-        try:
-            background_process.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
-            background_process.kill()
-            background_process.communicate()
-            addon_print("Background Process was killed after timeout.")
-
-        background_process = None
+def restart_processes():
+    """
+    ### restart_processes
+    裏プロセスを全て止めてから 1 つ起動し直す（最大数の変更時など）
+    """
+    stop_threads_and_process()
+    preview_cache.cached_nodes.clear()
+    update_tracker.request_update()
+    start_process()
 
 
 def clean_temp_dir():
@@ -254,18 +360,10 @@ def clean_temp_dir():
 
 
 def update_blend_path():
-    def notify_new_blend_loaded():
-        while not background_process_ready:
-            sleep(1 / 60)
-        send_message(messages.NEW_BLEND_ABSPATH, bpy.path.abspath(bpy.data.filepath))
-
-    if background_process_ready:
-        notify_new_blend_loaded()
-    else:
-        # Wait until the process is ready to receive the message, because it must
-        # arrive, otherwise all future jobs will be ignored
-        notifier = threading.Thread(target=notify_new_blend_loaded, daemon=True)
-        notifier.start()
+    global current_blend_abspath
+    current_blend_abspath = bpy.path.abspath(bpy.data.filepath)
+    # 準備中の裏プロセスには、準備完了時に送られる
+    broadcast(messages.NEW_BLEND_ABSPATH, current_blend_abspath)
 
 
 def force_update_failed_images(node_trees):
@@ -282,8 +380,7 @@ def load_pre(_=None):
     with send_lock:
         pending_jobs.clear()
     # Delete images in the background process to free up RAM
-    if background_process_ready:
-        send_message(messages.FREE_RESSOURCES)
+    broadcast(messages.FREE_RESSOURCES)
 
 
 @persistent
@@ -312,66 +409,6 @@ def exit_callback():
     clean_temp_dir()
 
 
-def start_background_process():
-    authkey = current_process().authkey
-    global listener
-
-    port = 6000
-    while port < 10000:
-        try:
-            listener = Listener(("localhost", port), authkey=authkey)
-            break
-        except OSError as error:
-            if (
-                (platform.system() == "Windows" and error.errno == 10048)
-                or (platform.system() == "Linux" and error.errno == 98)
-                or (platform.system() == "Darwin" and error.errno == 48)
-            ):
-                # Windows: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
-                # Linux: [Errno 98] Address already in use
-                # macOS: [Errno 48] Address already in use
-                port += 1
-            else:
-                raise
-
-    global background_process
-    # import 文ではフォルダ名にハイフンなどを含むと構文エラーになるため、importlib で読み込む
-    worker_module = f"{ADDON_PACKAGE}.src.background_worker"
-    process_args = [
-        bpy.app.binary_path,
-        "--factory-startup",
-        "--addons",
-        ADDON_PACKAGE,
-        "-b",  # Run in background without UI
-        PREVIEW_SCENE_PATH,
-        "--python-expr",
-        f"import importlib; importlib.import_module({worker_module!r}).run({port}, {authkey})",
-    ]
-
-    env_copy = os.environ.copy()
-
-    for custom_script_dir in bpy.context.preferences.filepaths.script_directories:
-        # Only use the custom script dir if the addon is installed there. If BLENDER_USER_SCRIPTS is set, but the addon
-        # is installed in the default location, the background process will fail to import the addon.
-        if os.path.exists(os.path.join(custom_script_dir.directory, "addons", ADDON_PACKAGE)):
-            env_copy["BLENDER_USER_SCRIPTS"] = custom_script_dir.directory
-            break
-
-    if get_preferences().enable_debug_output:
-        background_process = subprocess.Popen(process_args, env=env_copy)
-    else:
-        background_process = subprocess.Popen(
-            process_args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, env=env_copy
-        )
-
-    global connection
-    connection = listener.accept()
-
-    global watcher_thread
-    watcher_thread = WatcherThread()
-    watcher_thread.start()
-
-
 def register():
     # Make sure we only register the callback once
     atexit.unregister(exit_callback)
@@ -381,14 +418,9 @@ def register():
     bpy.app.handlers.load_post.append(load_post)
     bpy.app.handlers.save_post.append(save_post)
 
-    # In case the background process throws an exception, the process_starter thread could get stuck
-    # on listener.accept(). Enable the daemon flag to make sure the Blender process doesn't hang after
-    # quit when this happens.
-    process_starter = threading.Thread(target=start_background_process, daemon=True)
-    process_starter.start()
-
-    # 遅延登録のため load_post を取り逃しており、blend のパスが裏プロセスに伝わらず全ジョブが破棄されてしまう
+    # 遅延登録のため load_post を取り逃しているので、ここで今の .blend のパスを控える
     update_blend_path()
+    start_process()
 
 
 def unregister():
