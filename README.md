@@ -135,6 +135,8 @@ uv run ruff check
 uv run ruff check --fix
 ```
 
+変更履歴は [CHANGELOG.md](CHANGELOG.md) に記録しています
+
 ## ライセンス
 
 このプロジェクトは [GNU General Public License v3.0](LICENSE) の下で配布しています。
@@ -149,4 +151,4 @@ uv run ruff check --fix
 - Copyright (C) 2021 Simon Wendsche
 - Copyright (C) 2026 Guillaume Henrion aka GYOMH
 
-元プロジェクトの更新履歴は [documentation.txt](documentation.txt) を参照してください。
+元プロジェクトの更新履歴は [CHANGELOG.md](CHANGELOG.md) の「元プロジェクトの変更履歴」を参照してください
