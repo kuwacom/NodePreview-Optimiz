@@ -46,6 +46,18 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         "pressing Ctrl+Shift+P to make them visible",
     )
 
+    def update_redraw(self, context):
+        from .lib.editor_utils import force_node_editor_draw
+
+        force_node_editor_draw(("WINDOW", "HEADER"))
+
+    selected_nodes_only: BoolProperty(
+        name="Selected Nodes Only",
+        default=False,
+        update=update_redraw,
+        description="Only show and render previews of selected nodes. Useful in large node trees",
+    )
+
     update_during_animation_playback: BoolProperty(
         name="Update During Animation Playback",
         default=True,
@@ -151,6 +163,7 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         layout = self.layout
 
         layout.prop(self, "previews_enabled_by_default")
+        layout.prop(self, "selected_nodes_only")
         layout.prop(self, "update_during_animation_playback")
 
         row = layout.row()
@@ -186,6 +199,7 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         col.label(text="Shift+O: Set the output to show in the preview thumbnail for the active node")
         col.label(text="Ctrl+P: Cycle the preview shape (plane, sphere, cube, monkey) on selected nodes")
         col.label(text="Shift+P: Show the preview of the active node enlarged")
+        col.label(text="Ctrl+Alt+P: Toggle showing previews of selected nodes only")
         col.label(text="(These shortcuts can be changed in the Keymap settings)")
 
 

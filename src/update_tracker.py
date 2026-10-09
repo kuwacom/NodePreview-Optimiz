@@ -102,6 +102,11 @@ def make_update_signature(context, node_tree, node_tree_hierarchy, node_tree_own
             )
         )
 
+    # 選択中のノードだけを表示する時は、選択の変更でジョブを作り直す必要がある（選択では depsgraph の通知が来ない）
+    selected_nodes = (
+        tuple(node.name for node in node_tree.nodes if node.select) if preferences.selected_nodes_only else ()
+    )
+
     # Group Input の解決に親ツリーのアクティブノード（グループのインスタンス）が使われるため含める
     parent_active_nodes = tuple(
         tree.nodes.active.name if tree.nodes.active else None for tree in node_tree_hierarchy[:-1]
@@ -113,6 +118,7 @@ def make_update_signature(context, node_tree, node_tree_hierarchy, node_tree_own
         parent_active_nodes,
         context.scene.render.engine,
         preferences.previews_enabled_by_default,
+        selected_nodes,
         preferences.thumb_resolution,
         preferences.surface_preview_shape,
         preferences.background_pattern,

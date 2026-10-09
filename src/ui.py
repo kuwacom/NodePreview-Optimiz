@@ -68,6 +68,7 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
         layout.prop(preferences, "thumb_scale")
         layout.prop(preferences, "thumb_z_offset")
         layout.prop(preferences, "previews_enabled_by_default")
+        layout.prop(preferences, "selected_nodes_only")
         layout.prop(preferences, "surface_preview_shape")
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_open_preferences.bl_idname, icon="PREFERENCES")
 
@@ -99,6 +100,7 @@ def draw_node_header_menu(self, context):
         # 起動は数秒で終わるため、場所を取らないようアイコンだけにする
         row.label(text="", icon="SORTTIME")
     row.prop(get_tree_settings(node_tree), "enabled", toggle=True, text="", icon="STATUSBAR")
+    row.prop(get_preferences(context), "selected_nodes_only", toggle=True, text="", icon="RESTRICT_SELECT_OFF")
     row.popover(panel=NODEPREVIEW_OPTIMIZ_PT_header_popover.__name__, text="")
 
 
@@ -120,6 +122,7 @@ class NODEPREVIEW_OPTIMIZ_PT_node_tree_settings(bpy.types.Panel, NodePreviewOpti
         layout.prop(get_tree_settings(get_edited_node_tree(context)), "enabled")
 
         preferences = get_preferences(context)
+        layout.prop(preferences, "selected_nodes_only")
         layout.prop(preferences, "thumb_scale")
         layout.prop(preferences, "thumb_z_offset")
 

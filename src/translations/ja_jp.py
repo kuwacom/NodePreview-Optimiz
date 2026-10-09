@@ -38,6 +38,20 @@ TRANSLATIONS = {
         "If disabled, thumbnails are only shown after selecting nodes and "
         "pressing Ctrl+Shift+P to make them visible",
     ): "サムネイルを最初から表示するかどうか。オフにすると、ノードを選んで Ctrl+Shift+P を押したときだけ表示されます",
+    (DEFAULT, "Selected Nodes Only"): "選択中のノードだけ表示",
+    (
+        DEFAULT,
+        "Only show and render previews of selected nodes. Useful in large node trees",
+    ): "選択中のノードのプレビューだけを表示・レンダリングします。大きなノードツリーで便利です",
+    (OPERATOR, "Toggle Selected Nodes Only"): "選択中のノードだけ表示を切り替え",
+    (
+        DEFAULT,
+        "Toggle showing previews of selected nodes only",
+    ): "選択中のノードのプレビューだけを表示するかを切り替えます",
+    (
+        DEFAULT,
+        "Ctrl+Alt+P: Toggle showing previews of selected nodes only",
+    ): "Ctrl+Alt+P: 選択中のノードだけプレビューを表示するかを切り替える",
     (DEFAULT, "Update During Animation Playback"): "アニメーション再生中も更新",
     (
         DEFAULT,

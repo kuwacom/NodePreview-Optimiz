@@ -68,6 +68,18 @@ class NODEPREVIEW_OPTIMIZ_OT_restart_background(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class NODEPREVIEW_OPTIMIZ_OT_toggle_selected_nodes_only(bpy.types.Operator):
+    bl_idname = f"{ID_PREFIX}.toggle_selected_nodes_only"
+    bl_label = "Toggle Selected Nodes Only"
+    bl_description = "Toggle showing previews of selected nodes only"
+
+    def execute(self, context):
+        preferences = get_preferences(context)
+        # update コールバックで再描画される
+        preferences.selected_nodes_only = not preferences.selected_nodes_only
+        return {"FINISHED"}
+
+
 class NODEPREVIEW_OPTIMIZ_OT_toggle_preview(bpy.types.Operator):
     bl_idname = f"{ID_PREFIX}.toggle_preview"
     bl_label = "Toggle Node Previews"
@@ -243,6 +255,7 @@ classes = (
     NODEPREVIEW_OPTIMIZ_OT_open_preferences,
     NODEPREVIEW_OPTIMIZ_OT_set_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_restart_background,
+    NODEPREVIEW_OPTIMIZ_OT_toggle_selected_nodes_only,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
     NODEPREVIEW_OPTIMIZ_OT_toggle_ignore_scale,
     NODEPREVIEW_OPTIMIZ_OT_set_output,

@@ -201,10 +201,15 @@ def handler():
 
     preferences = get_preferences(context)
     enabled_by_default = preferences.previews_enabled_by_default
+    selected_nodes_only = preferences.selected_nodes_only
+
+    def is_shown(node):
+        return is_node_enabled(node, enabled_by_default) and (not selected_nodes_only or node.select)
+
     all_previews_disabled = True
     for node in node_tree.nodes:
         try:
-            if is_node_enabled(node, enabled_by_default):
+            if is_shown(node):
                 all_previews_disabled = False
                 break
         except AttributeError:  # Some special nodes might not have the node_preview attribute
@@ -315,7 +320,7 @@ def handler():
             except UnsupportedNodeException:
                 continue
 
-            if not is_node_enabled(node, enabled_by_default):
+            if not is_shown(node):
                 continue
 
             preview_shape = get_preview_shape(node, preferences.surface_preview_shape)
@@ -361,7 +366,7 @@ def handler():
         if not is_node_supported(node, engine):
             continue
 
-        if not is_node_enabled(node, enabled_by_default):
+        if not is_shown(node):
             continue
 
         location = node.location.copy()

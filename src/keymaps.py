@@ -24,6 +24,7 @@ from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_set_output,
     NODEPREVIEW_OPTIMIZ_OT_toggle_ignore_scale,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
+    NODEPREVIEW_OPTIMIZ_OT_toggle_selected_nodes_only,
 )
 from .zoom_view import NODEPREVIEW_OPTIMIZ_OT_zoom_preview
 
@@ -34,6 +35,7 @@ KEYMAP_DEFINITIONS = (
     (NODEPREVIEW_OPTIMIZ_OT_set_output, "O", {"shift": True}),
     (NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object, "P", {"ctrl": True}),
     (NODEPREVIEW_OPTIMIZ_OT_zoom_preview, "P", {"shift": True}),
+    (NODEPREVIEW_OPTIMIZ_OT_toggle_selected_nodes_only, "P", {"ctrl": True, "alt": True}),
 )
 
 addon_keymaps = []
