@@ -2,23 +2,21 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-__all__ = (
-    "load_image",
-)
+__all__ = ("load_image",)
 
 
 # limited replacement for BPyImage.comprehensiveImageLoad
 def load_image(
-        imagepath,
-        dirname="",
-        place_holder=False,
-        recursive=False,
-        ncase_cmp=True,
-        convert_callback=None,
-        verbose=False,
-        relpath=None,
-        check_existing=False,
-        force_reload=False,
+    imagepath,
+    dirname="",
+    place_holder=False,
+    recursive=False,
+    ncase_cmp=True,
+    convert_callback=None,
+    verbose=False,
+    relpath=None,
+    check_existing=False,
+    force_reload=False,
 ):
     """
     Return an image from the file path with options to search multiple paths
@@ -59,6 +57,7 @@ def load_image(
     :rtype: :class:`bpy.types.Image`
     """
     import os
+
     import bpy
 
     # -------------------------------------------------------------------------
@@ -74,7 +73,7 @@ def load_image(
         image = bpy.data.images.new(name, 128, 128)
         # allow the path to be resolved later
         image.filepath = path
-        image.source = 'FILE'
+        image.source = "FILE"
         return image
 
     def _image_load(path):
@@ -94,9 +93,9 @@ def load_image(
 
         if verbose:
             if image:
-                print("    image loaded '{:s}'".format(path))
+                print(f"    image loaded '{path:s}'")
             else:
-                print("    image load failed '{:s}'".format(path))
+                print(f"    image load failed '{path:s}'")
 
         # image path has been checked so the path could not be read for some
         # reason, so be sure to return a placeholder
@@ -109,6 +108,7 @@ def load_image(
             if relpath is not None:
                 # make relative
                 from bpy.path import relpath as relpath_fn
+
                 # can't always find the relative path
                 # (between drive letters on windows)
                 try:
@@ -124,9 +124,8 @@ def load_image(
     def _recursive_search(paths, filename_check):
         for path in paths:
             for dirpath, _dirnames, filenames in os.walk(path):
-
                 # skip '.svn'
-                if dirpath[0] in {".", b'.'}:
+                if dirpath[0] in {".", b"."}:
                     continue
 
                 for filename in filenames:
@@ -138,7 +137,7 @@ def load_image(
     imagepath = bpy.path.native_pathsep(imagepath)
 
     if verbose:
-        print("load_image('{:s}', '{:s}', ...)".format(imagepath, dirname))
+        print(f"load_image('{imagepath:s}', '{dirname:s}', ...)")
 
     if os.path.exists(imagepath):
         return _image_load(imagepath)
@@ -158,7 +157,7 @@ def load_image(
                 bpy.path.resolve_ncase(filepath_test),
             )
         else:
-            ncase_variants = (filepath_test, )
+            ncase_variants = (filepath_test,)
 
         for nfilepath in ncase_variants:
             if os.path.exists(nfilepath):
@@ -177,10 +176,11 @@ def load_image(
             imagepath_base = imagepath_base.lower()
 
             def image_filter(fn):
-                return (imagepath_base == fn.lower())
+                return imagepath_base == fn.lower()
         else:
+
             def image_filter(fn):
-                return (imagepath_base == fn)
+                return imagepath_base == fn
 
         nfilepath = next(_recursive_search(search_paths, image_filter), None)
         if nfilepath is not None:

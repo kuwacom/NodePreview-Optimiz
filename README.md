@@ -119,6 +119,22 @@ flowchart LR
 - 画像シーケンスのプレビューは、フレームを変えても更新されません
 - IES ノードには対応していません
 
+## 開発
+
+開発環境は [uv](https://docs.astral.sh/uv/) で管理しています。整形と静的チェックには [Ruff](https://docs.astral.sh/ruff/) を使います
+
+```sh
+# 開発用の依存関係をインストール
+uv sync
+
+# コードを整形
+uv run ruff format
+
+# 静的チェック（--fix で自動修正できるものは直す）
+uv run ruff check
+uv run ruff check --fix
+```
+
 ## ライセンス
 
 このプロジェクトは [GNU General Public License v3.0](LICENSE) の下で配布しています。

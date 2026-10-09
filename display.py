@@ -16,45 +16,55 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import bpy
-from bpy.app.handlers import persistent
-from bpy.types import SpaceImageEditor, SpaceNodeEditor, AddonPreferences
+import os
+from math import sqrt
+from time import sleep, time
+
 import blf
+import bpy
 import gpu
+from bpy.app.handlers import persistent
+from bpy.types import SpaceNodeEditor
 from gpu_extras.batch import batch_for_shader
 
-from time import time, sleep
-from math import sqrt
-import os
 join_paths = os.path.join
+import base64
 import platform
-import tempfile
+import queue
+import re
 import shutil
 import subprocess
+import tempfile
 import threading
 from multiprocessing import current_process
-from multiprocessing.connection import Listener, Connection
-from typing import Optional
-import base64
-import re
-import queue
+from multiprocessing.connection import Connection, Listener
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 
 
-from . import (addon_name, THUMB_CHANNEL_COUNT, SUPPORTED_NODE_TREE, force_node_editor_draw,
-               needs_linking, UnsupportedNodeException, BACKGROUND_PATTERNS, get_blend_abspath,
-               get_image_linking_info, needs_sphere_preview)
-from . import messages, node_converter, scene_converter
-from .node_converter import node_to_script, make_node_key
-
+from . import (
+    BACKGROUND_PATTERNS,
+    SUPPORTED_NODE_TREE,
+    THUMB_CHANNEL_COUNT,
+    UnsupportedNodeException,
+    addon_name,
+    force_node_editor_draw,
+    get_blend_abspath,
+    get_image_linking_info,
+    messages,
+    needs_linking,
+    needs_sphere_preview,
+    node_converter,
+    scene_converter,
+)
+from .node_converter import make_node_key, node_to_script
 
 images_failed_to_link_lock = threading.Lock()
 images_failed_to_link = set()
 
 
 class WatcherThread(threading.Thread):
-    def __init__(self,  *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stop_event = threading.Event()
 
@@ -77,11 +87,13 @@ class WatcherThread(threading.Thread):
                     force_node_editor_draw()
                 elif tag == messages.JOB_DONE:
                     node_key, result_array, thumb_resolution, job_timestamp, error_message, full_error_log = data
-                    
+
                     if full_error_log:
                         addon_print(full_error_log)
 
-                    thumbnails[node_key] = Thumbnail(result_array, thumb_resolution, thumb_resolution, THUMB_CHANNEL_COUNT, error_message)
+                    thumbnails[node_key] = Thumbnail(
+                        result_array, thumb_resolution, thumb_resolution, THUMB_CHANNEL_COUNT, error_message
+                    )
 
                     try:
                         last_timestamp = cached_nodes[node_key][1]
@@ -110,10 +122,10 @@ temp_dir = join_paths(tempfile.gettempdir(), f"BlenderNodePreview_{os.getpid()}"
 TEMP_DIR_REGEX_PATTERN = r"BlenderNodePreview_[0-9]+"
 
 background_process_ready = False
-background_process: Optional[subprocess.Popen] = None
-listener: Optional[Listener] = None
-connection: Optional[Connection] = None
-watcher_thread: Optional[WatcherThread] = None
+background_process: subprocess.Popen | None = None
+listener: Listener | None = None
+connection: Connection | None = None
+watcher_thread: WatcherThread | None = None
 
 # 変更の無い再描画（パン・ズーム・マウス移動）で重い変換処理を丸ごと省くための状態
 update_generation = 0  # ノード等に変更が入るたびに増える世代番号
@@ -171,13 +183,23 @@ def make_update_signature(context, node_tree, node_tree_hierarchy, node_tree_own
         props = getattr(node, "node_preview", None)
         if props is None:
             continue
-        node_settings.append((node.name, props.enabled, props.enabled_modified, props.ignore_scale,
-                              props.auto_choose_output, props.output_index, props.preview_object,
-                              props.force_update_counter))
+        node_settings.append(
+            (
+                node.name,
+                props.enabled,
+                props.enabled_modified,
+                props.ignore_scale,
+                props.auto_choose_output,
+                props.output_index,
+                props.preview_object,
+                props.force_update_counter,
+            )
+        )
 
     # Group Input の解決に親ツリーのアクティブノード（グループのインスタンス）が使われるため含める
-    parent_active_nodes = tuple(tree.nodes.active.name if tree.nodes.active else None
-                                for tree in node_tree_hierarchy[:-1])
+    parent_active_nodes = tuple(
+        tree.nodes.active.name if tree.nodes.active else None for tree in node_tree_hierarchy[:-1]
+    )
 
     return (
         node_tree_owner.as_pointer() if node_tree_owner else None,
@@ -244,16 +266,16 @@ def create_thumbnail_shader():
     # ModelViewProjectionMatrix is a reserved/builtin uniform name: Blender fills it in
     # automatically on batch.draw(), no manual uniform_float() call needed.
     vert_out = gpu.types.GPUStageInterfaceInfo("node_preview_thumbnail_interface")
-    vert_out.smooth('VEC2', "texCoord_interp")
+    vert_out.smooth("VEC2", "texCoord_interp")
 
     shader_info = gpu.types.GPUShaderCreateInfo()
-    shader_info.push_constant('MAT4', "ModelViewProjectionMatrix")
-    shader_info.push_constant('BOOL', "gamma_correct")
-    shader_info.sampler(0, 'FLOAT_2D', "image")
-    shader_info.vertex_in(0, 'VEC2', "pos")
-    shader_info.vertex_in(1, 'VEC2', "texCoord")
+    shader_info.push_constant("MAT4", "ModelViewProjectionMatrix")
+    shader_info.push_constant("BOOL", "gamma_correct")
+    shader_info.sampler(0, "FLOAT_2D", "image")
+    shader_info.vertex_in(0, "VEC2", "pos")
+    shader_info.vertex_in(1, "VEC2", "texCoord")
     shader_info.vertex_out(vert_out)
-    shader_info.fragment_out(0, 'VEC4', "fragColor")
+    shader_info.fragment_out(0, "VEC4", "fragColor")
 
     with open(join_paths(current_dir, "shaders", "thumbnail_vert.glsl")) as vert:
         shader_info.vertex_source(vert.read())
@@ -268,6 +290,7 @@ use_fallback_shader = False
 
 def using_fallback_shader():
     return use_fallback_shader
+
 
 if not bpy.app.background:
     try:
@@ -297,13 +320,14 @@ class Thumbnail:
             # Note: this operation also affects the alpha channel, which is not correct, but since
             # the alpha channel is currently not used, it doesn't matter.
             import numpy as np
+
             self.pixels = np.power(self.pixels, 2.2)
 
-        buffer = gpu.types.Buffer('FLOAT', self.width * self.height * self.channel_count, self.pixels)
+        buffer = gpu.types.Buffer("FLOAT", self.width * self.height * self.channel_count, self.pixels)
 
         # TODO is this actually (height, width)? And is the format correct, why not 32F?
         # (Code from https://docs.blender.org/api/current/bpy.types.RenderEngine.html)
-        self.texture = gpu.types.GPUTexture((self.width, self.height), format='RGBA16F', data=buffer)
+        self.texture = gpu.types.GPUTexture((self.width, self.height), format="RGBA16F", data=buffer)
 
         # No longer needed, delete to save memory
         self.pixels = None
@@ -320,7 +344,7 @@ class Thumbnail:
 
         batch = batch_for_shader(
             shader,
-            'TRIS',
+            "TRIS",
             {
                 "pos": (bottom_left, bottom_right, top_right, top_left),
                 "texCoord": ((0, 0), (1, 0), (1, 1), (0, 1)),
@@ -392,8 +416,7 @@ def needs_more_than_1_sample(node, use_sphere_preview):
         # At roughness = 0, there's no noise with 1 sample
         return roughness_input.is_linked or roughness_input.default_value > 0
 
-    return (bl_idname.startswith("ShaderNodeBsdf")
-            or bl_idname in NODES_NEEDING_MORE_SAMPLES)
+    return bl_idname.startswith("ShaderNodeBsdf") or bl_idname in NODES_NEEDING_MORE_SAMPLES
 
 
 def is_node_supported(node, engine):
@@ -412,6 +435,7 @@ def to_valid_filename(name):
 
 def handler():
     from time import perf_counter
+
     __start = perf_counter()
 
     if not background_process_ready:
@@ -542,9 +566,16 @@ def handler():
 
             try:
                 # Even if the preview is disabled, we need to convert the script so dependent nodes can retrieve it from the node scripts cache
-                node_script, images_to_load, images_to_link = node_to_script(node, node_tree_owner, node_scripts_cache,
-                                                                             group_hashes, incoming_links, background_colors,
-                                                                             node_tree_hierarchy, context.scene.render.engine)
+                node_script, images_to_load, images_to_link = node_to_script(
+                    node,
+                    node_tree_owner,
+                    node_scripts_cache,
+                    group_hashes,
+                    incoming_links,
+                    background_colors,
+                    node_tree_hierarchy,
+                    context.scene.render.engine,
+                )
             except UnsupportedNodeException:
                 continue
 
@@ -555,7 +586,9 @@ def handler():
             use_sphere_preview = needs_sphere_preview(node)
             needs_more_samples = needs_more_than_1_sample(node, use_sphere_preview)
 
-            scene_script = scene_converter.scene_to_script(context, needs_more_samples, use_sphere_preview, thumb_resolution)
+            scene_script = scene_converter.scene_to_script(
+                context, needs_more_samples, use_sphere_preview, thumb_resolution
+            )
             script_hash = hash(node_script + scene_script)
             node_key = make_node_key(node, node_tree, node_tree_owner)
 
@@ -625,7 +658,7 @@ def handler():
 
         topleft_x, topleft_y = view_to_region_scaled(context, *location, clip=False)
         topright_x, _ = view_to_region_scaled(context, location[0] + node.width, 0, clip=False)
-        node_width = (topright_x - topleft_x)
+        node_width = topright_x - topleft_x
 
         BASE_WIDTH = 150
         size = BASE_WIDTH * scaled_zoom * thumb_scale
@@ -674,7 +707,9 @@ def handler():
                     if node.node_preview.ignore_scale:
                         text_y = draw_text("Scale ignored", (text_x, text_y), text_size, scaled_zoom)
                     else:
-                        text_y = draw_text("Scale can be ignored\nwith Ctrl+Shift+i", (text_x, text_y), text_size, scaled_zoom)
+                        text_y = draw_text(
+                            "Scale can be ignored\nwith Ctrl+Shift+i", (text_x, text_y), text_size, scaled_zoom
+                        )
             except KeyError:
                 # Node doesn't have a known scale threshold, don't show the help message
                 pass
@@ -730,8 +765,9 @@ def stop_threads_and_process():
 
 def clean_temp_dir():
     os_temp_dir = os.path.dirname(temp_dir)
-    addon_temp_dirs = [join_paths(os_temp_dir, name) for name in os.listdir(os_temp_dir)
-                       if re.match(TEMP_DIR_REGEX_PATTERN, name)]
+    addon_temp_dirs = [
+        join_paths(os_temp_dir, name) for name in os.listdir(os_temp_dir) if re.match(TEMP_DIR_REGEX_PATTERN, name)
+    ]
 
     for path in addon_temp_dirs:
         try:
@@ -747,7 +783,7 @@ def clean_temp_dir():
 def update_blend_path():
     def notify_new_blend_loaded():
         while not background_process_ready:
-            sleep(1/60)
+            sleep(1 / 60)
         connection.send((messages.NEW_BLEND_ABSPATH, bpy.path.abspath(bpy.data.filepath)))
 
     if background_process_ready:
@@ -810,12 +846,14 @@ def start_background_process():
     port = 6000
     while port < 10000:
         try:
-            listener = Listener(('localhost', port), authkey=authkey)
+            listener = Listener(("localhost", port), authkey=authkey)
             break
         except OSError as error:
-            if ((platform.system() == "Windows" and error.errno == 10048)
+            if (
+                (platform.system() == "Windows" and error.errno == 10048)
                 or (platform.system() == "Linux" and error.errno == 98)
-                or (platform.system() == "Darwin" and error.errno == 48)):
+                or (platform.system() == "Darwin" and error.errno == 48)
+            ):
                 # Windows: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
                 # Linux: [Errno 98] Address already in use
                 # macOS: [Errno 48] Address already in use
@@ -827,10 +865,12 @@ def start_background_process():
     process_args = [
         bpy.app.binary_path,
         "--factory-startup",
-        "--addons", f"{addon_name}",
+        "--addons",
+        f"{addon_name}",
         "-b",  # Run in background without UI
         join_paths(current_dir, "data", "previewscene.blend"),
-        "--python-expr", f"import {addon_name}; {addon_name}.background.run({port}, {authkey})",
+        "--python-expr",
+        f"import {addon_name}; {addon_name}.background.run({port}, {authkey})",
     ]
 
     env_copy = os.environ.copy()
@@ -854,7 +894,9 @@ def start_background_process():
     if enable_debug_output:
         background_process = subprocess.Popen(process_args, env=env_copy)
     else:
-        background_process = subprocess.Popen(process_args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, env=env_copy)
+        background_process = subprocess.Popen(
+            process_args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, env=env_copy
+        )
 
     global connection
     connection = listener.accept()
@@ -867,6 +909,7 @@ def start_background_process():
 
 def display_register():
     import atexit
+
     # Make sure we only register the callback once
     atexit.unregister(exit_callback)
     atexit.register(exit_callback)

@@ -18,6 +18,7 @@
 
 from math import ceil
 
+
 def scene_to_script(context, needs_more_samples, use_sphere_preview, thumb_resolution):
     # Note: These settings are not cleaned up/reset after the thumbnail is rendered!
     return f"""

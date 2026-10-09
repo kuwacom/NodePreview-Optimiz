@@ -1,0 +1,41 @@
+[project]
+name = "nodepreview-optimiz"
+version = "1.0.1"
+description = "Blender のシェーダーノードの上にプレビューを表示するアドオン"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+# Blender 4.0 の同梱 Python が 3.10 のため、これより新しい構文は使わない
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14",
+]
+
+# Blender のアドオンとして直接読み込むため、Python パッケージとしてはビルドしない
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["data", "shaders", "images"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "W",   # pycodestyle の警告
+    "F",   # pyflakes
+    "I",   # import の並び順
+    "UP",  # 新しい構文への書き換え
+    "B",   # バグになりやすい書き方
+]
+
+[tool.ruff.lint.isort]
+# アドオン内の相対 import を外部パッケージと区別するため
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"

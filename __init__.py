@@ -16,13 +16,12 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import bpy
-from bpy.types import AddonPreferences
-from bpy.props import FloatProperty, FloatVectorProperty, IntProperty, EnumProperty, BoolProperty
-from bpy.utils import register_class, unregister_class
-
 from os.path import basename, dirname
 
+import bpy
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty
+from bpy.types import AddonPreferences
+from bpy.utils import register_class, unregister_class
 
 addon_name = basename(dirname(__file__))
 THUMB_CHANNEL_COUNT = 4
@@ -53,9 +52,11 @@ def _handle_legacy_addon_conflict():
     if _LEGACY_ADDON_MODULE == addon_name or _LEGACY_ADDON_MODULE not in bpy.context.preferences.addons:
         return None
 
-    print(f"[{bl_info['name']}] Detected the original 'Node Preview' addon (module "
-          f"'{_LEGACY_ADDON_MODULE}') installed alongside this fork. It uses the same internal "
-          f"identifiers and would break registration, so it is being disabled and removed automatically.")
+    print(
+        f"[{bl_info['name']}] Detected the original 'Node Preview' addon (module "
+        f"'{_LEGACY_ADDON_MODULE}') installed alongside this fork. It uses the same internal "
+        f"identifiers and would break registration, so it is being disabled and removed automatically."
+    )
 
     # Must run before this fork's own classes register: if our classes register first, Blender
     # silently replaces the old addon's identically-named classes with ours, so the old addon's
@@ -76,11 +77,15 @@ def _handle_legacy_addon_conflict():
         pass
 
     import os
+
     import addon_utils
+
     still_installed = any(os.path.isdir(os.path.join(p, _LEGACY_ADDON_MODULE)) for p in addon_utils.paths())
     if still_installed:
-        print(f"[{bl_info['name']}] Could not automatically remove the old 'Node Preview' addon. "
-              f"Please remove it manually in Edit > Preferences > Add-ons to avoid conflicts.")
+        print(
+            f"[{bl_info['name']}] Could not automatically remove the old 'Node Preview' addon. "
+            f"Please remove it manually in Edit > Preferences > Add-ons to avoid conflicts."
+        )
     else:
         print(f"[{bl_info['name']}] Removed the old 'Node Preview' addon.")
     return None
@@ -91,7 +96,9 @@ class UnsupportedNodeException(Exception):
 
 
 def is_group_node(node):
-    return hasattr(node, "node_tree") and (isinstance(node.node_tree, bpy.types.ShaderNodeTree) or node.node_tree is None)
+    return hasattr(node, "node_tree") and (
+        isinstance(node.node_tree, bpy.types.ShaderNodeTree) or node.node_tree is None
+    )
 
 
 def needs_sphere_preview(node):
@@ -104,17 +111,16 @@ def needs_sphere_preview(node):
                 if needs_sphere_preview(subnode):
                     return True
 
-        return (bl_idname.startswith("ShaderNodeBsdf")
-                or bl_idname in {
-                    "ShaderNodeSubsurfaceScattering",
-                    "ShaderNodeVolumeScatter",
-                    "ShaderNodeVolumePrincipled",
-                    "ShaderNodeVolumeAbsorption",
-                    "ShaderNodeMixShader",
-                    "ShaderNodeAddShader",
-                    "ShaderNodeEeveeSpecular",
-                    "ShaderNodeEmission",
-                })
+        return bl_idname.startswith("ShaderNodeBsdf") or bl_idname in {
+            "ShaderNodeSubsurfaceScattering",
+            "ShaderNodeVolumeScatter",
+            "ShaderNodeVolumePrincipled",
+            "ShaderNodeVolumeAbsorption",
+            "ShaderNodeMixShader",
+            "ShaderNodeAddShader",
+            "ShaderNodeEeveeSpecular",
+            "ShaderNodeEmission",
+        }
     elif preview_object == "SPHERE":
         return True
     elif preview_object == "PLANE":
@@ -153,6 +159,7 @@ def make_unique_image_name(image):
         return name
     else:
         import hashlib
+
         # The md5 hexdigest is always 32 characters long, so it should be OK for Blender
         return hashlib.md5(name.encode("utf-8")).hexdigest()
 
@@ -162,8 +169,10 @@ class BACKGROUND_PATTERNS:
     WHITE = "WHITE"
 
 
-BG_COLOR_DESC = ("Visible when parts of a shader are transparent. Note that very dark or saturated background "
-                 "colors can produce misleading results for thumbnails of colored transparent shaders")
+BG_COLOR_DESC = (
+    "Visible when parts of a shader are transparent. Note that very dark or saturated background "
+    "colors can produce misleading results for thumbnails of colored transparent shaders"
+)
 
 
 class NodePreviewAddonPreferences(AddonPreferences):
@@ -171,49 +180,86 @@ class NodePreviewAddonPreferences(AddonPreferences):
     # (by default "NodePreview", but a user/dev might change the folder name)
     bl_idname = addon_name
 
-    previews_enabled_by_default: BoolProperty(name="Previews Visible by Default", default=True,
-                                              description="Choose wether the thumbnails should be visible by default or not. "
-                                                          "If disabled, thumbnails are only shown after selecting nodes and "
-                                                          "pressing Ctrl+Shift+P to make them visible")
+    previews_enabled_by_default: BoolProperty(
+        name="Previews Visible by Default",
+        default=True,
+        description="Choose wether the thumbnails should be visible by default or not. "
+        "If disabled, thumbnails are only shown after selecting nodes and "
+        "pressing Ctrl+Shift+P to make them visible",
+    )
 
-    update_during_animation_playback: BoolProperty(name="Update During Animation Playback", default=True,
-                                                   description="When disabled, previews will not update while animation playback "
-                                                               "is running. Can be used to improve performance of animation playback "
-                                                               "in complex scenes")
+    update_during_animation_playback: BoolProperty(
+        name="Update During Animation Playback",
+        default=True,
+        description="When disabled, previews will not update while animation playback "
+        "is running. Can be used to improve performance of animation playback "
+        "in complex scenes",
+    )
 
-    thumb_scale: FloatProperty(name="Thumbnail Scale", default=50, min=1, max=100, subtype="PERCENTAGE",
-                               description="Size of the thumbnails in the node editor")
+    thumb_scale: FloatProperty(
+        name="Thumbnail Scale",
+        default=50,
+        min=1,
+        max=100,
+        subtype="PERCENTAGE",
+        description="Size of the thumbnails in the node editor",
+    )
 
-    thumb_z_offset: FloatProperty(name="Vertical Offset", default=5, min=0, max=50,
-                                  description="Vertical offset of the thumbnails from the node")
+    thumb_z_offset: FloatProperty(
+        name="Vertical Offset", default=5, min=0, max=50, description="Vertical offset of the thumbnails from the node"
+    )
 
-    thumb_resolution: IntProperty(name="Thumbnail Resolution", default=150, min=50, soft_max=300, max=500,
-                                  description="Higher resolutions preserve fine detail in textures better, but lead to slower updates")
+    thumb_resolution: IntProperty(
+        name="Thumbnail Resolution",
+        default=150,
+        min=50,
+        soft_max=300,
+        max=500,
+        description="Higher resolutions preserve fine detail in textures better, but lead to slower updates",
+    )
 
     background_pattern_items = [
         (BACKGROUND_PATTERNS.CHECKER, "Checkerboard Pattern", "", 0),
         (BACKGROUND_PATTERNS.WHITE, "Solid Color", "", 1),
     ]
-    background_pattern: EnumProperty(name="Background", items=background_pattern_items, default="CHECKER",
-                                     description="The background pattern is visible when parts of a shader are transparent/transmissive")
+    background_pattern: EnumProperty(
+        name="Background",
+        items=background_pattern_items,
+        default="CHECKER",
+        description="The background pattern is visible when parts of a shader are transparent/transmissive",
+    )
 
-    background_color_1: FloatVectorProperty(name="Background Color", default=(0.994, 0.994, 0.994), min=0, max=1, subtype="COLOR",
-                                            description=BG_COLOR_DESC)
-    background_color_2: FloatVectorProperty(name="Background Color", default=(0.8086, 0.8086, 0.8086), min=0, max=1, subtype="COLOR",
-                                            description=BG_COLOR_DESC)
+    background_color_1: FloatVectorProperty(
+        name="Background Color", default=(0.994, 0.994, 0.994), min=0, max=1, subtype="COLOR", description=BG_COLOR_DESC
+    )
+    background_color_2: FloatVectorProperty(
+        name="Background Color",
+        default=(0.8086, 0.8086, 0.8086),
+        min=0,
+        max=1,
+        subtype="COLOR",
+        description=BG_COLOR_DESC,
+    )
 
-    show_help: BoolProperty(name="Show Help Messages", default=True,
-                            description="Show the following help message:\n"
-                                        "Procedural texture scale can be ignored with Ctrl+Shift+I (shown if texture scale is so large "
-                                        "that the texture is no longer recognizable, or if texture scale is driven by another texture")
+    show_help: BoolProperty(
+        name="Show Help Messages",
+        default=True,
+        description="Show the following help message:\n"
+        "Procedural texture scale can be ignored with Ctrl+Shift+I (shown if texture scale is so large "
+        "that the texture is no longer recognizable, or if texture scale is driven by another texture",
+    )
 
     need_blender_restart = False
+
     def update_enable_debug_output(self, context):
         NodePreviewAddonPreferences.need_blender_restart = True
 
-    enable_debug_output: BoolProperty(name="Enable Debug Output", default=False,
-                                      update=update_enable_debug_output,
-                                      description="Print debug information to the system console")
+    enable_debug_output: BoolProperty(
+        name="Enable Debug Output",
+        default=False,
+        update=update_enable_debug_output,
+        description="Print debug information to the system console",
+    )
 
     def draw(self, context):
         layout = self.layout
@@ -263,8 +309,8 @@ def poll_node_tree(context):
 
 
 class NODE_PT_node_preview(bpy.types.Panel):
-    bl_space_type = 'NODE_EDITOR'
-    bl_region_type = 'HEADER'
+    bl_space_type = "NODE_EDITOR"
+    bl_region_type = "HEADER"
     bl_label = bl_info["name"]
     bl_description = f"Settings of the {bl_info['name']} Addon"
     bl_ui_units_x = 9
@@ -334,7 +380,7 @@ class NODEPREVIEW_OT_toggle_preview(bpy.types.Operator):
 
         # If at least one node has the preview enabled, this operator should switch them all off.
         # Only when all selected nodes have the preview disabled, switch them on.
-        initial_state = any((node.node_preview.is_enabled(preferences) for node in selection))
+        initial_state = any(node.node_preview.is_enabled(preferences) for node in selection)
 
         for node in selection:
             node.node_preview.enabled = not initial_state
@@ -346,8 +392,10 @@ class NODEPREVIEW_OT_toggle_preview(bpy.types.Operator):
 class NODEPREVIEW_OT_toggle_ignore_scale(bpy.types.Operator):
     bl_idname = "nodepreview.toggle_ignore_scale"
     bl_label = "Toggle Ignore Scale"
-    bl_description = ("On selected nodes: Toggle wether to ignore procedural texture scale when rendering the node preview "
-                      "(useful on procedural textures like Musgrave, Voronoi, Noise etc.)")
+    bl_description = (
+        "On selected nodes: Toggle wether to ignore procedural texture scale when rendering the node preview "
+        "(useful on procedural textures like Musgrave, Voronoi, Noise etc.)"
+    )
     bl_options = {"UNDO"}
 
     @classmethod
@@ -378,6 +426,7 @@ def get_active_node(context):
         return None
     node_tree = space.path[-1].node_tree
     return node_tree.nodes.active
+
 
 class NODEPREVIEW_OT_set_output(bpy.types.Operator):
     bl_idname = "nodepreview.set_output"
@@ -411,7 +460,9 @@ class NODEPREVIEW_OT_set_output(bpy.types.Operator):
         index = 0
         for socket in node.outputs:
             if socket.enabled:
-                NODEPREVIEW_OT_set_output.output_items.append((str(index), socket.name, f"Show preview for output {socket.name}", index))
+                NODEPREVIEW_OT_set_output.output_items.append(
+                    (str(index), socket.name, f"Show preview for output {socket.name}", index)
+                )
                 index += 1
 
         wm = context.window_manager
@@ -476,13 +527,19 @@ class NodePreviewNodeProps(bpy.types.PropertyGroup):
     enabled: BoolProperty(default=True, update=update_enabled)
     enabled_modified: BoolProperty(default=False)
     ignore_scale: BoolProperty(default=False)
-    auto_choose_output: BoolProperty(default=True, name="Auto", description="Use the first output with an outgoing connection")
+    auto_choose_output: BoolProperty(
+        default=True, name="Auto", description="Use the first output with an outgoing connection"
+    )
     output_index: IntProperty(default=0, min=0)
-    preview_object: EnumProperty(name="Preview Object",
-                                 items=(("PLANE", "Plane", "Flat Plane", 0),
-                                        ("SPHERE", "Sphere", "Sphere", 1),
-                                        ("AUTO", "Auto", "Use sphere for surface (BxDF) nodes, plane for everything else", 2)),
-                                 default="AUTO")
+    preview_object: EnumProperty(
+        name="Preview Object",
+        items=(
+            ("PLANE", "Plane", "Flat Plane", 0),
+            ("SPHERE", "Sphere", "Sphere", 1),
+            ("AUTO", "Auto", "Use sphere for surface (BxDF) nodes, plane for everything else", 2),
+        ),
+        default="AUTO",
+    )
 
     def is_enabled(self, addon_preferences):
         if self.enabled_modified:
@@ -509,8 +566,9 @@ class NodePreviewNodeProps(bpy.types.PropertyGroup):
 
 
 class NodePreviewTreeProps(bpy.types.PropertyGroup):
-    enabled: BoolProperty(name="Show Previews", default=True,
-                          description="Show thumbnails above the nodes in this node tree")
+    enabled: BoolProperty(
+        name="Show Previews", default=True, description="Show thumbnails above the nodes in this node tree"
+    )
 
     @classmethod
     def register(cls):
@@ -579,6 +637,7 @@ def _deferred_register():
     register_class(NodePreviewAddonPreferences)
 
     from .display import display_register
+
     display_register()
 
     for cls in classes:
@@ -590,7 +649,9 @@ def _deferred_register():
     wm = bpy.context.window_manager
     keymap = wm.keyconfigs.addon.keymaps.new(name="Node Editor", space_type="NODE_EDITOR")
 
-    keymap_item = keymap.keymap_items.new(NODEPREVIEW_OT_toggle_ignore_scale.bl_idname, "I", "PRESS", ctrl=True, shift=True)
+    keymap_item = keymap.keymap_items.new(
+        NODEPREVIEW_OT_toggle_ignore_scale.bl_idname, "I", "PRESS", ctrl=True, shift=True
+    )
     addon_keymaps.append((keymap, keymap_item))
     keymap_item = keymap.keymap_items.new(NODEPREVIEW_OT_toggle_preview.bl_idname, "P", "PRESS", ctrl=True, shift=True)
     addon_keymaps.append((keymap, keymap_item))
@@ -619,6 +680,7 @@ def unregister():
         bpy.types.NODE_HT_header.remove(draw_node_header_menu)
 
         from .display import display_unregister
+
         display_unregister()
 
         for cls in reversed(classes):

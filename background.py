@@ -16,17 +16,16 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import bpy
-
-import threading
-import queue
-from multiprocessing.connection import Client
-from time import time, perf_counter
 import os
+import queue
+import threading
+from multiprocessing.connection import Client
+from time import perf_counter, time
+
+import bpy
 import numpy as np
 
-from . import THUMB_CHANNEL_COUNT, messages, get_image_linking_info, make_unique_image_name, bpy_extras_image_utils
-
+from . import THUMB_CHANNEL_COUNT, bpy_extras_image_utils, get_image_linking_info, messages
 
 jobs = queue.LifoQueue()
 results = queue.SimpleQueue()
@@ -45,7 +44,7 @@ def background_print(*args, **kwargs):
 
 
 def free():
-    """ Must be executed from main thread! """
+    """Must be executed from main thread!"""
     background_print("Freeing ressources")
     images = bpy.data.images
     for image in images:
@@ -163,7 +162,7 @@ def do(job):
         blend_abspath,
         thumb_path,
         thumb_resolution,
-        timestamp
+        timestamp,
     ) = job
     failure = False, None
 
@@ -248,7 +247,9 @@ def do(job):
                     temp_image.name = temp_image.name + "___temp"
 
                     # Create new image with target (small) resolution
-                    image = bpy.data.images.new(image_name, thumb_resolution, thumb_resolution, alpha=True, float_buffer=True, is_data=False)
+                    image = bpy.data.images.new(
+                        image_name, thumb_resolution, thumb_resolution, alpha=True, float_buffer=True, is_data=False
+                    )
                     image.colorspace_settings.name = colorspace
 
                     # Note: Blender images are always created with 4 channels
@@ -271,7 +272,7 @@ def do(job):
                     if colorspace not in COLORSPACES_SUPPORTED:
                         error_message = "Unsupported Colorspace: " + colorspace
 
-        node_tree = bpy.data.materials['Material'].node_tree
+        node_tree = bpy.data.materials["Material"].node_tree
         starting_nodes = [node.name for node in node_tree.nodes]
 
         try:
@@ -286,11 +287,12 @@ def do(job):
             full_error_log += "----------------------------"
 
             import traceback
+
             full_error_log += traceback.format_exc()
 
             # Red surface
-            node_tree = bpy.data.materials['Material'].node_tree
-            output_node = node_tree.nodes['Material Output']
+            node_tree = bpy.data.materials["Material"].node_tree
+            output_node = node_tree.nodes["Material Output"]
             error_node = node_tree.nodes.new("ShaderNodeEmission")
             error_node.inputs[0].default_value = [1, 0, 0, 1]
             node_tree.links.new(error_node.outputs[0], output_node.inputs[0])
@@ -326,6 +328,7 @@ def do(job):
         return True, (node_key, result_array, thumb_resolution, timestamp, error_message, full_error_log)
     except Exception as error:
         import traceback
+
         background_print("Error in background process job:\n", error, "\n", traceback.format_exc())
         return failure
 
