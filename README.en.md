@@ -19,6 +19,30 @@ A Blender add-on that displays rendered preview images (thumbnails) above shader
 - **High-DPI displays**: Follows Blender's resolution scale setting
 - **English / Japanese**: Preferences, menus and text on thumbnails follow Blender's language setting
 
+## Added and Improved Features
+
+The following features have been added or improved compared to the original project
+
+### Added
+
+- **More preview shapes**: Besides plane and sphere, previews can use a cube or a monkey. The shape used for shader nodes can be chosen in the add-on preferences, and the current shape is highlighted on the buttons
+- **Enlarged view**: <kbd>Shift</kbd> + <kbd>P</kbd> re-renders the active node at a higher resolution and shows it large
+- **Selected nodes only**: <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> previews only the selected nodes. Handy in large node trees
+- **Pause and manual refresh**: Stop previews from updating while you edit, and refresh them with a button whenever you like
+- **Parallel rendering**: Thumbnails are rendered by several Blender processes in parallel. The maximum number can be changed in the add-on preferences
+- **Automatic recovery**: If a rendering process crashes, it is restarted automatically, and the header shows when rendering has stopped
+- **English / Japanese**: Preferences, menus and text on thumbnails are translated
+
+### Improved
+
+- **Lighter drawing**: Only the node groups used by the edited tree are converted, and conversion is skipped entirely on redraws without changes
+- **More efficient rendering**: Outdated jobs are dropped before being sent, nodes on screen are rendered first, and node groups are reused in the background process
+- **Memory cleanup**: Thumbnails of deleted nodes are discarded
+- **Startup fix**: Fixed previews not appearing when Blender was started by opening a `.blend` file
+- **No folder name restriction**: The add-on works even if its folder name contains a hyphen
+- **Version support**: Supports Blender 4.0–5.2, with deprecated APIs replaced by their newer equivalents. Previews are rendered with EEVEE on 4.2–4.5 too
+- **Error logging**: Startup failures and crashes of the background process are printed to the system console in detail
+
 ## Installation
 
 ### Option 1: Install the zip from Preferences
