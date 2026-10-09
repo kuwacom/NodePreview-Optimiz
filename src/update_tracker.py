@@ -26,6 +26,8 @@ from . import node_converter
 from .lib.node_utils import get_node_settings
 
 update_generation = 0  # ノード等に変更が入るたびに増える世代番号
+# 一時停止中でも変換を行う残り回数（手動更新で設定する）。50 ノード以上は前半/後半の 2 回で全体が更新される
+manual_refresh_passes = 0
 processed_state = {}  # node_tree : (update_generation, signature, 処理済みパート数)
 group_script_cache = {}  # frozenset(ノードグループ名) : node_groups_to_script の結果
 # この型の ID が更新されたときだけサムネイルが変わり得る
@@ -48,6 +50,28 @@ def invalidate_caches():
     """
     group_script_cache.clear()
     request_update()
+
+
+def request_manual_refresh():
+    """
+    ### request_manual_refresh
+    一時停止中でも、次の再描画で表示中のツリーのプレビューを作り直させる
+    """
+    global manual_refresh_passes
+    manual_refresh_passes = 2
+    invalidate_caches()
+
+
+def consume_manual_refresh():
+    """
+    ### consume_manual_refresh
+    @returns 一時停止中に変換を行って良ければ True（呼ぶたびに残り回数を 1 減らす）
+    """
+    global manual_refresh_passes
+    if manual_refresh_passes <= 0:
+        return False
+    manual_refresh_passes -= 1
+    return True
 
 
 def reset():

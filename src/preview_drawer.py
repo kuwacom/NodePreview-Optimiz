@@ -263,6 +263,9 @@ def handler():
     last_state = update_tracker.processed_state.get(node_tree)
     state_matches = last_state is not None and last_state[0] == generation and last_state[1] == signature
     needs_conversion = not (state_matches and last_state[2] >= parts_needed)
+    # 一時停止中は手元のサムネイルを描くだけにする。溜まった変更は再開時に世代番号の違いから検知される
+    if needs_conversion and preferences.pause_updates and not update_tracker.consume_manual_refresh():
+        needs_conversion = False
 
     if needs_conversion:
         group_scripts, group_images_to_load, group_images_to_link, group_hashes = update_tracker.get_group_script(
@@ -295,7 +298,11 @@ def handler():
     # Update Thumbnails #
     #####################
     if needs_conversion and (not context.screen.is_animation_playing or preferences.update_during_animation_playback):
-        update_tracker.processed_state[node_tree] = (generation, signature, last_state[2] + 1 if state_matches else 1)
+        processed_parts = last_state[2] + 1 if state_matches else 1
+        update_tracker.processed_state[node_tree] = (generation, signature, processed_parts)
+        if preferences.pause_updates and processed_parts >= parts_needed:
+            # 小さいツリーは 1 回で更新が終わるため、余った分で一時停止中の編集まで反映しないようにする
+            update_tracker.manual_refresh_passes = 0
         preview_cache.prune_tree(
             make_tree_key_suffix(node_tree, node_tree_owner),
             {make_node_key(node, node_tree, node_tree_owner) for node in node_tree.nodes},

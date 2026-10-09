@@ -42,6 +42,19 @@ def prune_tree(tree_key_suffix, current_node_keys):
                 cache.pop(key, None)
 
 
+def forget_rendered(tree_key_suffix):
+    """
+    ### forget_rendered
+    ツリーのノードを「レンダリング済み」として扱わないようにし、次の変換で作り直させる
+    （サムネイルは新しい結果が届くまで描き続ける）
+
+    @param tree_key_suffix - 対象のツリーの node_key の末尾部分
+    """
+    for key in list(cached_nodes):
+        if key.endswith(tree_key_suffix):
+            cached_nodes.pop(key, None)
+
+
 def free():
     """
     ### free

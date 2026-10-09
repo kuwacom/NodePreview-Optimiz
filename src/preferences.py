@@ -58,6 +58,14 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         description="Only show and render previews of selected nodes. Useful in large node trees",
     )
 
+    pause_updates: BoolProperty(
+        name="Pause Updates",
+        default=False,
+        update=update_redraw,
+        description="Stop updating previews when nodes are edited. Existing thumbnails stay visible, "
+        "and Refresh Previews updates them manually",
+    )
+
     update_during_animation_playback: BoolProperty(
         name="Update During Animation Playback",
         default=True,
@@ -164,6 +172,7 @@ class NodePreviewOptimizPreferences(AddonPreferences):
 
         layout.prop(self, "previews_enabled_by_default")
         layout.prop(self, "selected_nodes_only")
+        layout.prop(self, "pause_updates")
         layout.prop(self, "update_during_animation_playback")
 
         row = layout.row()

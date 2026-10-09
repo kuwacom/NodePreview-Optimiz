@@ -29,7 +29,7 @@ from .lib.editor_utils import (
     poll_node_tree,
 )
 from .lib.i18n import iface_, rpt_, tip_
-from .lib.node_utils import get_node_settings, get_preview_shape
+from .lib.node_utils import get_node_settings, get_preview_shape, make_tree_key_suffix
 from .properties import PREVIEW_OBJECT_ITEMS
 
 # Ctrl+P で切り替える順番
@@ -77,6 +77,24 @@ class NODEPREVIEW_OPTIMIZ_OT_toggle_selected_nodes_only(bpy.types.Operator):
         preferences = get_preferences(context)
         # update コールバックで再描画される
         preferences.selected_nodes_only = not preferences.selected_nodes_only
+        return {"FINISHED"}
+
+
+class NODEPREVIEW_OPTIMIZ_OT_refresh_previews(bpy.types.Operator):
+    bl_idname = f"{ID_PREFIX}.refresh_previews"
+    bl_label = "Refresh Previews"
+    bl_description = "Render the previews of this node tree again. Also works while updates are paused"
+
+    @classmethod
+    def poll(cls, context):
+        return poll_node_tree(context)
+
+    def execute(self, context):
+        from . import preview_cache, update_tracker
+
+        preview_cache.forget_rendered(make_tree_key_suffix(get_edited_node_tree(context), context.space_data.id))
+        update_tracker.request_manual_refresh()
+        force_node_editor_draw()
         return {"FINISHED"}
 
 
@@ -256,6 +274,7 @@ classes = (
     NODEPREVIEW_OPTIMIZ_OT_set_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_restart_background,
     NODEPREVIEW_OPTIMIZ_OT_toggle_selected_nodes_only,
+    NODEPREVIEW_OPTIMIZ_OT_refresh_previews,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
     NODEPREVIEW_OPTIMIZ_OT_toggle_ignore_scale,
     NODEPREVIEW_OPTIMIZ_OT_set_output,

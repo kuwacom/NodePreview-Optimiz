@@ -26,6 +26,7 @@ from .lib.node_utils import get_tree_settings
 from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_open_preferences,
+    NODEPREVIEW_OPTIMIZ_OT_refresh_previews,
     NODEPREVIEW_OPTIMIZ_OT_restart_background,
     NODEPREVIEW_OPTIMIZ_OT_set_output,
     NODEPREVIEW_OPTIMIZ_OT_set_preview_object,
@@ -69,8 +70,19 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
         layout.prop(preferences, "thumb_z_offset")
         layout.prop(preferences, "previews_enabled_by_default")
         layout.prop(preferences, "selected_nodes_only")
+        draw_update_controls(layout, preferences)
         layout.prop(preferences, "surface_preview_shape")
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_open_preferences.bl_idname, icon="PREFERENCES")
+
+
+def draw_update_controls(layout, preferences):
+    """
+    ### draw_update_controls
+    更新の一時停止と、手動で更新するボタンを並べる
+    """
+    row = layout.row(align=True)
+    row.prop(preferences, "pause_updates", toggle=True, icon="PAUSE")
+    row.operator(NODEPREVIEW_OPTIMIZ_OT_refresh_previews.bl_idname, icon="FILE_REFRESH")
 
 
 def draw_shape_buttons(layout, icon_only):
@@ -100,7 +112,10 @@ def draw_node_header_menu(self, context):
         # 起動は数秒で終わるため、場所を取らないようアイコンだけにする
         row.label(text="", icon="SORTTIME")
     row.prop(get_tree_settings(node_tree), "enabled", toggle=True, text="", icon="STATUSBAR")
-    row.prop(get_preferences(context), "selected_nodes_only", toggle=True, text="", icon="RESTRICT_SELECT_OFF")
+    preferences = get_preferences(context)
+    row.prop(preferences, "selected_nodes_only", toggle=True, text="", icon="RESTRICT_SELECT_OFF")
+    row.prop(preferences, "pause_updates", toggle=True, text="", icon="PAUSE")
+    row.operator(NODEPREVIEW_OPTIMIZ_OT_refresh_previews.bl_idname, text="", icon="FILE_REFRESH")
     row.popover(panel=NODEPREVIEW_OPTIMIZ_PT_header_popover.__name__, text="")
 
 
@@ -123,6 +138,7 @@ class NODEPREVIEW_OPTIMIZ_PT_node_tree_settings(bpy.types.Panel, NodePreviewOpti
 
         preferences = get_preferences(context)
         layout.prop(preferences, "selected_nodes_only")
+        draw_update_controls(layout, preferences)
         layout.prop(preferences, "thumb_scale")
         layout.prop(preferences, "thumb_z_offset")
 

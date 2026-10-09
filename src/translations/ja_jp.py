@@ -52,6 +52,17 @@ TRANSLATIONS = {
         DEFAULT,
         "Ctrl+Alt+P: Toggle showing previews of selected nodes only",
     ): "Ctrl+Alt+P: 選択中のノードだけプレビューを表示するかを切り替える",
+    (DEFAULT, "Pause Updates"): "更新を一時停止",
+    (
+        DEFAULT,
+        "Stop updating previews when nodes are edited. Existing thumbnails stay visible, "
+        "and Refresh Previews updates them manually",
+    ): "ノードを編集してもプレビューを更新しません。今のサムネイルは表示されたままで、「プレビューを更新」で手動で更新できます",
+    (OPERATOR, "Refresh Previews"): "プレビューを更新",
+    (
+        DEFAULT,
+        "Render the previews of this node tree again. Also works while updates are paused",
+    ): "このノードツリーのプレビューをレンダリングし直します。更新の一時停止中にも使えます",
     (DEFAULT, "Update During Animation Playback"): "アニメーション再生中も更新",
     (
         DEFAULT,
