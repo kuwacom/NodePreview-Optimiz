@@ -185,6 +185,7 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         col.label(text="Ctrl+Shift+i: Toggle wether to ignore the Scale socket on selected procedural texture nodes")
         col.label(text="Shift+O: Set the output to show in the preview thumbnail for the active node")
         col.label(text="Ctrl+P: Cycle the preview shape (plane, sphere, cube, monkey) on selected nodes")
+        col.label(text="Shift+P: Show the preview of the active node enlarged")
         col.label(text="(These shortcuts can be changed in the Keymap settings)")
 
 

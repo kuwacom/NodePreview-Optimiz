@@ -25,9 +25,10 @@ from . import preferences, translations
 
 def _ui_modules():
     # UI 用のモジュールは GPU などを使うため、裏プロセス（-b）では読み込まない
-    from . import background_client, keymaps, operators, preview_drawer, properties, ui, update_tracker
+    from . import background_client, keymaps, operators, preview_drawer, properties, ui, update_tracker, zoom_view
 
-    return properties, operators, ui, keymaps, update_tracker, preview_drawer, background_client
+    # 拡大表示はサムネイルの上に重ねるため、描画ハンドラーを preview_drawer より後に登録する
+    return properties, operators, ui, keymaps, update_tracker, preview_drawer, zoom_view, background_client
 
 
 def _deferred_register():

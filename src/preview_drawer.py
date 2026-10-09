@@ -69,6 +69,103 @@ def to_valid_filename(name):
     return base64.urlsafe_b64encode(name.encode("UTF-8")).decode("UTF-8")
 
 
+def get_background_colors(preferences):
+    using_checker_pattern = preferences.background_pattern == BACKGROUND_PATTERNS.CHECKER
+    background_col_1 = list(preferences.background_color_1) + [1]
+    background_col_2 = list(preferences.background_color_2) + [1] if using_checker_pattern else background_col_1
+    return background_col_1, background_col_2
+
+
+def make_job(node, node_key, script, group_scripts, images_to_load, images_to_link, thumb_resolution):
+    """
+    ### make_job
+    裏プロセスに送るジョブを組み立てる
+
+    @returns ジョブのタプル（最後の要素は作成時刻）
+    """
+    thumb_path = os.path.join(background_client.temp_dir, to_valid_filename(node_key) + ".png")
+
+    if getattr(node, "image", None):
+        # This info is used to show accurate error messages when images failed to link or load
+        image = node.image
+        image_needs_linking = needs_linking(image)
+        name, library_path = get_image_linking_info(image)
+        image_info = (
+            name,
+            library_path if image_needs_linking else None,
+            image_needs_linking,
+            bpy.path.abspath(image.filepath, library=image.library),
+        )
+    else:
+        image_info = None
+
+    return (
+        node_key,
+        script,
+        group_scripts,
+        images_to_load,
+        images_to_link,
+        image_info,
+        get_blend_abspath(),
+        thumb_path,
+        thumb_resolution,
+        time(),
+    )
+
+
+def make_single_node_job(context, node, node_key, thumb_resolution):
+    """
+    ### make_single_node_job
+    描画ハンドラーを通さずに、1 つのノードだけのジョブを作る（拡大表示用など）
+
+    @param node - 表示中のノードツリーにあるノード
+    @param node_key - 結果を受け取るキー（通常のサムネイルと分けたい場合は別のキーを渡す）
+    @param thumb_resolution - レンダリングする解像度
+    @returns ジョブ。対応していないノードなら None
+    """
+    space = context.space_data
+    node_tree_hierarchy = [elem.node_tree for elem in space.path]
+    node_tree = node_tree_hierarchy[-1]
+    engine = context.scene.render.engine
+    preferences = get_preferences(context)
+    if not is_node_supported(node, engine):
+        return None
+    if not node_converter.node_attributes_cache:
+        node_converter.build_node_attributes_cache()
+
+    group_scripts, group_images_to_load, group_images_to_link, group_hashes = update_tracker.get_group_script(
+        node_tree_hierarchy
+    )
+    incoming_links = {link.to_socket: link for link in node_tree.links}
+    try:
+        node_script, images_to_load, images_to_link = node_converter.node_to_script(
+            node,
+            space.id,
+            {},
+            group_hashes,
+            incoming_links,
+            get_background_colors(preferences),
+            node_tree_hierarchy,
+            engine,
+        )
+    except UnsupportedNodeException:
+        return None
+
+    # 大きく表示するとノイズが目立つため、常にサンプル数を増やしてノイズ除去も掛ける
+    scene_script = scene_converter.scene_to_script(
+        context, True, get_preview_shape(node, preferences.surface_preview_shape)
+    )
+    return make_job(
+        node,
+        node_key,
+        "\n".join((scene_script, node_script)),
+        group_scripts,
+        images_to_load | group_images_to_load,
+        images_to_link | group_images_to_link,
+        thumb_resolution,
+    )
+
+
 def handler():
     # from time import perf_counter
     # __start = perf_counter()
@@ -127,10 +224,7 @@ def handler():
     thumb_z_offset = preferences.thumb_z_offset
     thumb_resolution = preferences.thumb_resolution
 
-    using_checker_pattern = preferences.background_pattern == BACKGROUND_PATTERNS.CHECKER
-    background_col_1 = list(preferences.background_color_1) + [1]
-    background_col_2 = list(preferences.background_color_2) + [1] if using_checker_pattern else background_col_1
-    background_colors = background_col_1, background_col_2
+    background_colors = get_background_colors(preferences)
 
     # Sort nodes
     # Build node dependency mapping
@@ -233,37 +327,17 @@ def handler():
 
             cached_nodes = preview_cache.cached_nodes
             if node_key not in cached_nodes or cached_nodes[node_key][0] != script_hash:
-                timestamp = time()
-                thumb_path = os.path.join(background_client.temp_dir, to_valid_filename(node_key) + ".png")
-
-                if getattr(node, "image", None):
-                    # This info is used to show accurate error messages when images failed to link or load
-                    image = node.image
-                    image_needs_linking = needs_linking(image)
-                    name, library_path = get_image_linking_info(image)
-                    image_info = (
-                        name,
-                        library_path if image_needs_linking else None,
-                        image_needs_linking,
-                        bpy.path.abspath(image.filepath, library=image.library),
-                    )
-                else:
-                    image_info = None
-
-                job = (
+                job = make_job(
+                    node,
                     node_key,
                     "\n".join((scene_script, node_script)),
                     group_scripts,
                     images_to_load | group_images_to_load,
                     images_to_link | group_images_to_link,
-                    image_info,
-                    get_blend_abspath(),
-                    thumb_path,
                     thumb_resolution,
-                    timestamp,
                 )
                 jobs_to_send.append(job)
-                cached_nodes[node_key] = script_hash, timestamp
+                cached_nodes[node_key] = script_hash, job[-1]
 
                 # For debugging complex scripts
                 # if False and node.name == "Math":

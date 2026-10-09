@@ -354,6 +354,11 @@ def do(job):
                     background_print("replacing image", image_name, "because the colorspace changed")
                     bpy.data.images.remove(old_image)
                     need_to_load = True
+                elif old_abspath and tuple(old_image.size) != (thumb_resolution, thumb_resolution):
+                    # 拡大表示など解像度の違うジョブでは、縮小済みの画像のままだとぼやけるため読み直す
+                    background_print("replacing image", image_name, "because the resolution changed")
+                    bpy.data.images.remove(old_image)
+                    need_to_load = True
 
             if need_to_load:
                 # Load full resolution image and scale it down.

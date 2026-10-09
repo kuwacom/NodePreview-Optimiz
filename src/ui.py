@@ -31,6 +31,7 @@ from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_set_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
 )
+from .zoom_view import NODEPREVIEW_OPTIMIZ_OT_zoom_preview
 
 
 class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
@@ -57,6 +58,7 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
 
         layout.separator()
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_toggle_preview.bl_idname)
+        layout.operator(NODEPREVIEW_OPTIMIZ_OT_zoom_preview.bl_idname, icon="ZOOM_IN")
         draw_shape_buttons(layout, icon_only=True)
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_set_output.bl_idname)
 
@@ -128,6 +130,7 @@ class NODEPREVIEW_OPTIMIZ_PT_node_tools(bpy.types.Panel, NodePreviewOptimizSideb
     def draw(self, context):
         layout = self.layout
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_toggle_preview.bl_idname)
+        layout.operator(NODEPREVIEW_OPTIMIZ_OT_zoom_preview.bl_idname, icon="ZOOM_IN")
         draw_shape_buttons(layout, icon_only=True)
 
 

@@ -106,6 +106,18 @@ TRANSLATIONS = {
         DEFAULT,
         "Ctrl+P: Cycle the preview shape (plane, sphere, cube, monkey) on selected nodes",
     ): "Ctrl+P: 選択中のノードのプレビューの形状を切り替える（平面・球・立方体・モンキー）",
+    (
+        DEFAULT,
+        "Shift+P: Show the preview of the active node enlarged",
+    ): "Shift+P: アクティブなノードのプレビューを拡大表示する",
+    (OPERATOR, "Enlarge Preview"): "プレビューを拡大表示",
+    (
+        DEFAULT,
+        "On active node: Render the preview at a higher resolution and show it enlarged",
+    ): "アクティブなノード: プレビューを高い解像度でレンダリングし直して、大きく表示します",
+    (DEFAULT, "{} (rendering...)"): "{}（レンダリング中...）",
+    (DEFAULT, "Esc / Click: Close"): "Esc / クリック: 閉じる",
+    (DEFAULT, "This node can't be previewed"): "このノードはプレビューできません",
     (DEFAULT, "Surface Preview Shape"): "シェーダーのプレビュー形状",
     (
         DEFAULT,

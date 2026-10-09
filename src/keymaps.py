@@ -25,6 +25,7 @@ from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_toggle_ignore_scale,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
 )
+from .zoom_view import NODEPREVIEW_OPTIMIZ_OT_zoom_preview
 
 # (オペレーター, キー, 修飾キー)
 KEYMAP_DEFINITIONS = (
@@ -32,6 +33,7 @@ KEYMAP_DEFINITIONS = (
     (NODEPREVIEW_OPTIMIZ_OT_toggle_preview, "P", {"ctrl": True, "shift": True}),
     (NODEPREVIEW_OPTIMIZ_OT_set_output, "O", {"shift": True}),
     (NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object, "P", {"ctrl": True}),
+    (NODEPREVIEW_OPTIMIZ_OT_zoom_preview, "P", {"shift": True}),
 )
 
 addon_keymaps = []
