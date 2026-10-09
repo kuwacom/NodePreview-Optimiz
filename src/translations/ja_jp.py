@@ -146,6 +146,13 @@ TRANSLATIONS = {
         DEFAULT,
         "On selected nodes: Change preview object between plane and sphere",
     ): "選択中のノード: プレビューの形状を平面と球で切り替えます",
+    (OPERATOR, "Restart Preview Rendering"): "プレビューのレンダリングを再起動",
+    (
+        DEFAULT,
+        "Restart the background processes that render the thumbnails",
+    ): "サムネイルをレンダリングする裏プロセスを起動し直します",
+    (DEFAULT, "Preview rendering has stopped"): "プレビューのレンダリングが停止しました",
+    (DEFAULT, "Preview stopped"): "プレビュー停止中",
     (OPERATOR, "Open Preferences"): "設定を開く",
     (DEFAULT, f"Open the {ADDON_NAME} addon user preferences"): f"{ADDON_NAME} のアドオン設定を開きます",
     (DEFAULT, "No nodes selected"): "ノードが選択されていません",

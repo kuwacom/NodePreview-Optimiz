@@ -68,6 +68,18 @@ current_blend_abspath = ""
 # 起動中の裏プロセス。ジョブが溜まった時だけ、設定の最大数まで増やす
 processes = []
 
+# 裏プロセスが予期せず終了した時は自動で起動し直すが、起動直後に落ち続ける場合に繰り返さないよう回数を制限する
+MAX_CRASHES = 3
+CRASH_WINDOW_SECONDS = 60
+crash_times = []
+gave_up_restarting = False
+
+
+class STATUS:
+    STARTING = "STARTING"
+    RUNNING = "RUNNING"
+    STOPPED = "STOPPED"
+
 
 class BackgroundProcess:
     """
@@ -77,6 +89,7 @@ class BackgroundProcess:
     ### 特徴
     - 1 度に 1 件のジョブだけを処理させ、終わったら次を送る
     - 準備完了の通知を受けたら、ジョブより先に .blend のパスを送る
+    - 予期せず終了したら、処理中だったジョブを送信待ちに戻して起動し直す
     """
 
     def __init__(self):
@@ -84,9 +97,13 @@ class BackgroundProcess:
         self.listener: Listener | None = None
         self.connection = None
         self.ready = False
-        # 処理中のジョブの node_key（空いていれば None）
-        self.busy_node_key = None
+        # 処理中のジョブ（空いていれば None）。裏プロセスが落ちた時に送り直すため丸ごと持つ
+        self.busy_job = None
         self._stop_event = threading.Event()
+
+    @property
+    def busy_node_key(self):
+        return self.busy_job[0] if self.busy_job else None
 
     def start(self):
         # In case the background process throws an exception, the process_starter thread could get stuck
@@ -174,9 +191,43 @@ class BackgroundProcess:
             self.process = subprocess.Popen(
                 process_args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, env=env_copy
             )
+        # 接続前に落ちると accept() が戻らないため、終了を別スレッドで見張って listener を閉じる
+        threading.Thread(target=self._wait_for_exit, daemon=True).start()
 
-        self.connection = self.listener.accept()
+        try:
+            self.connection = self.listener.accept()
+        except OSError:
+            # 停止処理、または裏プロセスの終了で listener が閉じられた
+            return
         self._watch()
+
+    def _wait_for_exit(self):
+        process = self.process
+        process.wait()
+        if not self._stop_event.is_set():
+            self._on_unexpected_exit()
+
+    def _on_unexpected_exit(self):
+        with send_lock:
+            # 受信スレッドと終了待ちスレッドの両方から呼ばれ得るため、最初の 1 回だけ処理する
+            if self._stop_event.is_set():
+                return
+            self._stop_event.set()
+            self.ready = False
+            job, self.busy_job = self.busy_job, None
+            if job and job[0] not in pending_jobs:
+                pending_jobs[job[0]] = job
+            if self in processes:
+                processes.remove(self)
+
+        for closable in (self.connection, self.listener):
+            try:
+                if closable:
+                    closable.close()
+            except OSError:
+                pass
+        addon_print("Background process exited unexpectedly")
+        on_process_crashed()
 
     def _watch(self):
         """裏プロセスからのメッセージ（準備完了・レンダリング結果など）を受け取り続ける"""
@@ -187,7 +238,7 @@ class BackgroundProcess:
                 tag, data = self.connection.recv()
             except (OSError, EOFError, AttributeError):
                 # 停止処理で接続が閉じられた、または裏プロセスが終了した
-                self.ready = False
+                self._on_unexpected_exit()
                 return
 
             if tag == messages.BACKGROUND_PROCESS_READY:
@@ -195,7 +246,7 @@ class BackgroundProcess:
                 self.send(messages.NEW_BLEND_ABSPATH, current_blend_abspath)
                 self.ready = True
                 # Force one refresh to render all nodes that are currently visible
-                force_node_editor_draw()
+                force_node_editor_draw(("WINDOW", "HEADER"))
                 dispatch_jobs()
             elif tag == messages.JOB_DONE:
                 on_job_done(data)
@@ -208,8 +259,36 @@ class BackgroundProcess:
 
     def _finish_job(self):
         with send_lock:
-            self.busy_node_key = None
+            self.busy_job = None
         dispatch_jobs()
+
+
+def on_process_crashed():
+    global gave_up_restarting
+    now = time()
+    crash_times[:] = [crashed_at for crashed_at in crash_times if now - crashed_at < CRASH_WINDOW_SECONDS]
+    crash_times.append(now)
+
+    if len(crash_times) > MAX_CRASHES:
+        gave_up_restarting = True
+        addon_print("Background process keeps crashing, stopped restarting it")
+    elif not processes:
+        # 残りの裏プロセスがあれば、足りない分はジョブが溜まった時に増える
+        start_process()
+    dispatch_jobs()
+    force_node_editor_draw(("WINDOW", "HEADER"))
+
+
+def get_status():
+    """
+    ### get_status
+    @returns 裏プロセス全体の状態（STATUS のいずれか）
+    """
+    if gave_up_restarting:
+        return STATUS.STOPPED
+    if any(process.ready for process in processes):
+        return STATUS.RUNNING
+    return STATUS.STARTING
 
 
 def on_job_done(data):
@@ -291,13 +370,17 @@ def dispatch_jobs():
             job = _pick_job(in_flight)
             if job is None:
                 break
-            process.busy_node_key = job[0]
+            process.busy_job = job
             in_flight.add(job[0])
-            process.send(messages.NEW_JOB, job)
+            try:
+                process.send(messages.NEW_JOB, job)
+            except OSError:
+                # 送信中に裏プロセスが落ちた。ジョブは終了の検知で送信待ちに戻る
+                pass
 
         starting = sum(1 for process in processes if not process.ready)
         waiting = len(pending_jobs) - len(in_flight & pending_jobs.keys())
-        if waiting > starting and len(processes) < get_max_processes():
+        if not gave_up_restarting and waiting > starting and len(processes) < get_max_processes():
             start_process()
 
 
@@ -334,12 +417,16 @@ def stop_threads_and_process():
 def restart_processes():
     """
     ### restart_processes
-    裏プロセスを全て止めてから 1 つ起動し直す（最大数の変更時など）
+    裏プロセスを全て止めてから 1 つ起動し直す（最大数の変更時や、ユーザーによる再起動）
     """
+    global gave_up_restarting
+    gave_up_restarting = False
+    crash_times.clear()
     stop_threads_and_process()
     preview_cache.cached_nodes.clear()
     update_tracker.request_update()
     start_process()
+    force_node_editor_draw(("WINDOW", "HEADER"))
 
 
 def clean_temp_dir():

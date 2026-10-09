@@ -52,6 +52,18 @@ class NODEPREVIEW_OPTIMIZ_OT_open_preferences(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class NODEPREVIEW_OPTIMIZ_OT_restart_background(bpy.types.Operator):
+    bl_idname = f"{ID_PREFIX}.restart_background"
+    bl_label = "Restart Preview Rendering"
+    bl_description = "Restart the background processes that render the thumbnails"
+
+    def execute(self, context):
+        from . import background_client
+
+        background_client.restart_processes()
+        return {"FINISHED"}
+
+
 class NODEPREVIEW_OPTIMIZ_OT_toggle_preview(bpy.types.Operator):
     bl_idname = f"{ID_PREFIX}.toggle_preview"
     bl_label = "Toggle Node Previews"
@@ -200,6 +212,7 @@ class NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object(bpy.types.Operator):
 
 classes = (
     NODEPREVIEW_OPTIMIZ_OT_open_preferences,
+    NODEPREVIEW_OPTIMIZ_OT_restart_background,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
     NODEPREVIEW_OPTIMIZ_OT_toggle_ignore_scale,
     NODEPREVIEW_OPTIMIZ_OT_set_output,

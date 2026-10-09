@@ -32,16 +32,18 @@ def get_preferences(context=None):
     return context.preferences.addons[ADDON_PACKAGE].preferences
 
 
-def force_node_editor_draw():
+def force_node_editor_draw(region_types=("WINDOW",)):
     """
     ### force_node_editor_draw
     開いている全てのノードエディターに再描画を要求する
+
+    @param region_types - 再描画するリージョンの種類（ヘッダーの表示を変えた時は "HEADER" も含める）
     """
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
             if area.type == "NODE_EDITOR":
                 for region in area.regions:
-                    if region.type == "WINDOW":
+                    if region.type in region_types:
                         region.tag_redraw()
 
 

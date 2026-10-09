@@ -73,9 +73,7 @@ def handler():
     # from time import perf_counter
     # __start = perf_counter()
 
-    if not background_client.is_ready():
-        return
-
+    # 裏プロセスの起動中・再起動中も、手元のサムネイルは描き、ジョブは送信待ちに積んでおく
     context = bpy.context
 
     if context.space_data.tree_type != SUPPORTED_NODE_TREE:

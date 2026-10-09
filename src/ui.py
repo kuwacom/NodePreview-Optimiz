@@ -19,12 +19,14 @@
 
 import bpy
 
+from . import background_client
 from .lib.constants import ADDON_NAME
 from .lib.editor_utils import get_edited_node_tree, get_preferences, poll_node_tree
 from .lib.node_utils import get_tree_settings
 from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_open_preferences,
+    NODEPREVIEW_OPTIMIZ_OT_restart_background,
     NODEPREVIEW_OPTIMIZ_OT_set_output,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
 )
@@ -42,6 +44,11 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         layout.label(text=ADDON_NAME)
+
+        if background_client.get_status() == background_client.STATUS.STOPPED:
+            box = layout.box()
+            box.label(text="Preview rendering has stopped", icon="ERROR")
+            box.operator(NODEPREVIEW_OPTIMIZ_OT_restart_background.bl_idname, icon="FILE_REFRESH")
 
         layout.separator()
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_toggle_preview.bl_idname)
@@ -65,6 +72,12 @@ def draw_node_header_menu(self, context):
 
     row = layout.row(align=True)
     node_tree = get_edited_node_tree(context)
+    status = background_client.get_status()
+    if status == background_client.STATUS.STOPPED:
+        row.label(text="Preview stopped", icon="ERROR")
+    elif status == background_client.STATUS.STARTING:
+        # 起動は数秒で終わるため、場所を取らないようアイコンだけにする
+        row.label(text="", icon="SORTTIME")
     row.prop(get_tree_settings(node_tree), "enabled", toggle=True, text="", icon="STATUSBAR")
     row.popover(panel=NODEPREVIEW_OPTIMIZ_PT_header_popover.__name__, text="")
 
