@@ -167,7 +167,7 @@ def handler():
     needs_conversion = not (state_matches and last_state[2] >= parts_needed)
 
     if needs_conversion:
-        group_script, group_images_to_load, group_images_to_link, group_hashes = update_tracker.get_group_script(
+        group_scripts, group_images_to_load, group_images_to_link, group_hashes = update_tracker.get_group_script(
             node_tree_hierarchy
         )
 
@@ -249,7 +249,8 @@ def handler():
 
                 job = (
                     node_key,
-                    "\n".join((scene_script, group_script, node_script)),
+                    "\n".join((scene_script, node_script)),
+                    group_scripts,
                     images_to_load | group_images_to_load,
                     images_to_link | group_images_to_link,
                     image_info,

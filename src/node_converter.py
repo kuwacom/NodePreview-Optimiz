@@ -278,7 +278,8 @@ def node_groups_to_script(node_groups):
 
     sorted_groups = sort_topologically(annotated_groups.values(), get_dependent_groups)
 
-    script = ["node_group_mapping = {}"]
+    # 裏プロセスがグループ単位で作り直しを判断できるよう、(名前, ハッシュ, スクリプト) を依存順に並べる
+    group_scripts = []
     images_to_load = set()
     images_to_link = set()
     group_hashes = {}
@@ -344,10 +345,10 @@ def node_groups_to_script(node_groups):
                         )
 
         group_script_joined = "\n".join(group_script)
-        script.append(group_script_joined)
         group_hashes[unique_name] = hash(group_script_joined)
+        group_scripts.append((unique_name, group_hashes[unique_name], group_script_joined))
 
-    return "\n".join(script), images_to_load, images_to_link, group_hashes
+    return group_scripts, images_to_load, images_to_link, group_hashes
 
 
 def collect_used_node_groups(node_trees):

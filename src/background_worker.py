@@ -36,6 +36,10 @@ jobs = queue.LifoQueue()
 results = queue.SimpleQueue()
 images_failed_to_link = queue.SimpleQueue()
 node_timestamps = {}
+# グループ名 : (ハッシュ, ノードグループ)。内容が変わらない限りジョブをまたいで使い回す
+node_group_cache = {}
+# 使われなくなったグループが溜まり続けないよう、これを超えたら全て作り直す
+MAX_CACHED_NODE_GROUPS = 200
 free_requested = False
 stop_requested = False
 current_blend_abspath = ""
@@ -47,9 +51,59 @@ COLORSPACES_GAMMA_CORRECTED = {"sRGB", "Filmic sRGB"}
 IMAGE_ABSPATH_KEY = f"{ID_PREFIX}_abspath"
 
 
+def remove_cached_node_groups():
+    """
+    ### remove_cached_node_groups
+    使い回しているノードグループを全て消す
+    """
+    for _, node_group in node_group_cache.values():
+        try:
+            bpy.data.node_groups.remove(node_group, do_unlink=True, do_id_user=True, do_ui_user=True)
+        except ReferenceError:
+            # 既に消えている
+            pass
+    node_group_cache.clear()
+
+
+def prepare_node_groups(group_scripts):
+    """
+    ### prepare_node_groups
+    ジョブで使うノードグループを用意する。前のジョブと同じ内容のグループは作り直さずに使い回す
+
+    @param group_scripts - (グループ名, ハッシュ, 作成スクリプト) の一覧（依存されるグループが先）
+    @returns グループ名 : 用意したノードグループ
+    """
+    if len(node_group_cache) > MAX_CACHED_NODE_GROUPS:
+        remove_cached_node_groups()
+
+    node_group_mapping = {}
+    try:
+        for name, group_hash, group_script in group_scripts:
+            cached = node_group_cache.get(name)
+            if cached and cached[0] == group_hash:
+                node_group_mapping[name] = cached[1]
+                continue
+
+            if cached:
+                # 中のグループが変わると外側のグループのハッシュも変わるため、ここで作り直せば参照が古くならない
+                bpy.data.node_groups.remove(cached[1], do_unlink=True, do_id_user=True, do_ui_user=True)
+            exec(
+                "import bpy; import mathutils; from contextlib import suppress\n" + group_script,
+                {"node_group_mapping": node_group_mapping},
+            )
+            node_group_cache[name] = (group_hash, node_group_mapping[name])
+    except Exception:
+        # 途中まで作ったグループが残ると次のジョブで誤って使い回されるため、全て捨てる
+        remove_cached_node_groups()
+        raise
+    return node_group_mapping
+
+
 def free():
     """Must be executed from main thread!"""
     background_print("Freeing ressources")
+    # グループは画像を参照しているため、画像より先に消す
+    remove_cached_node_groups()
     images = bpy.data.images
     for image in images:
         images.remove(image)
@@ -163,6 +217,7 @@ def do(job):
     (
         node_key,
         script,
+        group_scripts,
         images_to_load,
         images_to_link,
         image_info,
@@ -284,8 +339,9 @@ def do(job):
         starting_nodes = [node.name for node in node_tree.nodes]
 
         try:
+            node_group_mapping = prepare_node_groups(group_scripts)
             script = "import bpy; import mathutils; from contextlib import suppress; " + script
-            exec(script)
+            exec(script, {"node_group_mapping": node_group_mapping})
         except Exception as error:
             error_message = ("{}", (str(error),))
 
@@ -316,9 +372,7 @@ def do(job):
             if node.name not in starting_nodes:
                 node_tree.nodes.remove(node)
 
-        # Delete all node groups
-        for node_tree in bpy.data.node_groups[:]:
-            bpy.data.node_groups.remove(node_tree, do_unlink=True, do_id_user=True, do_ui_user=True)
+        # ノードグループは次のジョブで使い回すため消さない（作り直しは prepare_node_groups で判断する）
 
         # Check if this node contains an image that could not be loaded, and show a helpful error message in that case
         if image_info:
