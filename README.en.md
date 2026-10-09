@@ -23,7 +23,7 @@ A Blender add-on that displays rendered preview images (thumbnails) above shader
 
 ### Option 1: Install the zip from Preferences
 
-1. Download the repository as a zip
+1. Download `NodePreview-Optimiz.zip` from the [latest release](https://github.com/kuwacom/NodePreview-Optimiz/releases/tag/latest) (built automatically from the latest commit on `main`)
 2. In Blender, open **Edit > Preferences > Add-ons**
 3. From the `⌄` menu at the top right, choose **Install from Disk...** and select the zip from step 1
 4. Enable **NodePreview-Optimiz** in the list

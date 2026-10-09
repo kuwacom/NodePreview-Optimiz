@@ -23,7 +23,7 @@ Blender のシェーダーノードの上に、レンダリングしたプレビ
 
 ### 方法 1: プリファレンスから zip でインストール
 
-1. リポジトリを zip でダウンロードします
+1. [Releases の latest](https://github.com/kuwacom/NodePreview-Optimiz/releases/tag/latest) から `NodePreview-Optimiz.zip` をダウンロードします（`main` の最新コミットから自動で作られます）
 2. Blender で **編集 > プリファレンス > アドオン** を開きます
 3. 右上の `⌄` メニューから **ディスクからインストール...** を選び、1 の zip を選択します
 4. 一覧に出てくる **NodePreview-Optimiz** にチェックを入れて有効にします

@@ -1,0 +1,67 @@
+# main の最新コミットを、インストールできる zip として latest リリースに置く
+name: Release latest
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 連続で push された時は、古い方の公開を取りやめて最新だけを公開する
+concurrency:
+  group: release-latest
+  cancel-in-progress: true
+
+env:
+  ADDON_DIR: NodePreview-Optimiz
+  ZIP_NAME: NodePreview-Optimiz.zip
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read add-on version
+        id: version
+        run: |
+          # bl_info は Blender がコードを実行せずに読むリテラルなので、同じく ast で読む
+          version=$(python3 - <<'EOF'
+          import ast
+          tree = ast.parse(open("__init__.py", encoding="utf-8").read())
+          bl_info = next(
+              node.value for node in tree.body
+              if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "bl_info"
+          )
+          print(".".join(map(str, ast.literal_eval(bl_info)["version"])))
+          EOF
+          )
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build add-on zip
+        run: |
+          # zip の中のフォルダ名がそのままアドオンのモジュール名になるため、ブランチ名などが付かないよう揃える
+          mkdir -p "dist/$ADDON_DIR"
+          cp -r __init__.py src LICENSE README.md README.en.md CHANGELOG.md "dist/$ADDON_DIR/"
+          find dist -name "__pycache__" -type d -prune -exec rm -rf {} +
+          (cd dist && zip -r -q "$ZIP_NAME" "$ADDON_DIR")
+          unzip -l "dist/$ZIP_NAME"
+
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          # 同じ latest タグを使い回すため、前のリリースを消してからタグを最新のコミットへ動かす
+          gh release delete latest --yes || true
+          git tag -f latest "$GITHUB_SHA"
+          git push -f origin latest
+          gh release create latest "dist/$ZIP_NAME" \
+            --title "Latest (v$VERSION, $short_sha)" \
+            --notes "main の最新コミット ($GITHUB_SHA) から自動で作成したビルドです。
+
+          Blender の **編集 > プリファレンス > アドオン** の **ディスクからインストール...** で、この zip をそのまま選んでください。" \
+            --latest
