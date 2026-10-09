@@ -41,6 +41,7 @@ from .lib.node_utils import (
     is_node_enabled,
     is_node_supported,
     make_node_key,
+    make_tree_key_suffix,
     needs_more_than_1_sample,
     needs_sphere_preview,
     sort_topologically,
@@ -198,6 +199,10 @@ def handler():
     #####################
     if needs_conversion and (not context.screen.is_animation_playing or preferences.update_during_animation_playback):
         update_tracker.processed_state[node_tree] = (generation, signature, last_state[2] + 1 if state_matches else 1)
+        preview_cache.prune_tree(
+            make_tree_key_suffix(node_tree, node_tree_owner),
+            {make_node_key(node, node_tree, node_tree_owner) for node in node_tree.nodes},
+        )
 
         for node in sorted_nodes[start:end]:
             if not is_node_supported(node, engine):

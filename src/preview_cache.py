@@ -27,6 +27,21 @@ cached_nodes = {}  # node_key : hash(node_script), timestamp
 update_first_part = {}  # node_tree : Bool
 
 
+def prune_tree(tree_key_suffix, current_node_keys):
+    """
+    ### prune_tree
+    消えたノード（削除・名前変更）のサムネイルとキャッシュを捨てる
+
+    @param tree_key_suffix - 対象のツリーの node_key の末尾部分
+    @param current_node_keys - 今ツリーにあるノードの node_key の集合
+    """
+    for cache in (thumbnails, cached_nodes):
+        # 裏プロセスの結果を受け取るスレッドが追加し得るため、キーを写してから消す
+        for key in list(cache):
+            if key.endswith(tree_key_suffix) and key not in current_node_keys:
+                cache.pop(key, None)
+
+
 def free():
     """
     ### free

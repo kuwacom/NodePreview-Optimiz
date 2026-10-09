@@ -171,10 +171,24 @@ def is_node_supported(node, engine):
         return node.bl_idname not in UNSUPPORTED_NODES_CYCLES
 
 
+# ノード名とツリーの部分を区切り、ツリー単位でキーを見分けられるようにする（名前に入らない制御文字を使う）
+NODE_KEY_SEPARATOR = "\x1f"
+
+
+def make_tree_key_suffix(node_tree, node_tree_owner):
+    """
+    ### make_tree_key_suffix
+    @returns このツリーに属するノードの node_key に共通する末尾部分
+    """
+    # The node_tree_owner typename is added because a material and a world could have the same unique name
+    return NODE_KEY_SEPARATOR + NODE_KEY_SEPARATOR.join(
+        (node_tree.name_full, type(node_tree_owner).__name__, node_tree_owner.name_full)
+    )
+
+
 # node_tree_owner is the material, world etc. that contains the node_tree
 def make_node_key(node, node_tree, node_tree_owner):
-    # The node_tree_owner typename is added because a material and a world could have the same unique name
-    return node.name + node_tree.name_full + type(node_tree_owner).__name__ + node_tree_owner.name_full
+    return node.name + make_tree_key_suffix(node_tree, node_tree_owner)
 
 
 def sort_topologically(nodes, get_dependent_nodes):
