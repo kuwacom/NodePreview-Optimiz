@@ -67,6 +67,8 @@ pending_jobs = OrderedDict()
 background_process_busy = False
 # 描画ハンドラー（メインスレッド）と WatcherThread の両方から送信するため、送信と送信待ちの操作をまとめて守る
 send_lock = threading.RLock()
+# 最後の描画で画面内にあったノード。これらのジョブを優先して送る
+visible_node_keys = frozenset()
 
 
 class WatcherThread(threading.Thread):
@@ -170,9 +172,24 @@ def dispatch_jobs():
     with send_lock:
         if not background_process_ready or background_process_busy or not pending_jobs:
             return
-        _, job = pending_jobs.popitem(last=True)
+        node_key = next((key for key in reversed(pending_jobs) if key in visible_node_keys), None)
+        if node_key is None:
+            _, job = pending_jobs.popitem(last=True)
+        else:
+            job = pending_jobs.pop(node_key)
         background_process_busy = True
         send_message(messages.NEW_JOB, job)
+
+
+def set_visible_node_keys(node_keys):
+    """
+    ### set_visible_node_keys
+    画面内にあるノードを知らせ、それらのジョブを先に処理させる
+
+    @param node_keys - 画面内にあるノードの node_key の集合
+    """
+    global visible_node_keys
+    visible_node_keys = frozenset(node_keys)
 
 
 def on_job_finished():

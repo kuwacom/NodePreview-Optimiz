@@ -278,6 +278,7 @@ def handler():
     #####################
     #  Draw Thumbnails  #
     #####################
+    visible_node_keys = set()
     for node in sorted_nodes:
         if not is_node_supported(node, engine):
             continue
@@ -310,8 +311,10 @@ def handler():
         if bottom_right[0] < 0 or bottom_left[0] > area.width or top_left[1] < 0 or bottom_left[1] > area.height:
             continue
 
+        node_key = make_node_key(node, node_tree, node_tree_owner)
+        visible_node_keys.add(node_key)
+
         try:
-            node_key = make_node_key(node, node_tree, node_tree_owner)
             thumb = preview_cache.thumbnails[node_key]
         except KeyError:
             # No thumbnail was created for this node, meaning it should not
@@ -354,6 +357,7 @@ def handler():
     gpu.state.blend_set(old_blend_mode)
     gpu.shader.unbind()
 
+    background_client.set_visible_node_keys(visible_node_keys)
     # Send jobs in reversed order so the leftmost node (which was edited) is rendered first for fast feedback
     if jobs_to_send:
         background_client.submit_jobs(reversed(jobs_to_send))
