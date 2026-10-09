@@ -140,8 +140,8 @@ TRANSLATIONS = {
     (DEFAULT, "Surface Preview Shape"): "シェーダーのプレビュー形状",
     (
         DEFAULT,
-        "Shape used for surface (BxDF) nodes when their preview object is set to Auto",
-    ): "プレビューの形状が「自動」のとき、サーフェス（BxDF）のノードに使う形状",
+        "Shape used for surface (BxDF) nodes when their preview object is set to Auto. Other nodes always use a plane",
+    ): "プレビューの形状が「自動」のとき、サーフェス（BxDF）のノードに使う形状。それ以外のノードは常に平面です",
     (DEFAULT, "Monkey"): "モンキー",
     (DEFAULT, "Monkey (Suzanne)"): "モンキー（Suzanne）",
     (DEFAULT, "Preview Shape: {}"): "プレビューの形状: {}",

@@ -109,7 +109,7 @@ Blender のシェーダーノードの上に、レンダリングしたプレビ
 | Update During Animation Playback | オン | アニメーション再生中もプレビューを更新するか |
 | Thumbnail Scale | 50% | ノードエディター上でのプレビューの大きさ |
 | Vertical Offset | 5 | ノードからプレビューまでの縦方向の距離 |
-| Surface Preview Shape | 球 | 形状が「自動」のとき、BSDF などのノードに使う形状（球 / 立方体 / モンキー） |
+| Surface Preview Shape | 球 | 形状が「自動」のとき、BSDF などのノードに使う形状（平面 / 球 / 立方体 / モンキー）。それ以外のノードは常に平面 |
 | Max Background Processes | 2 | 並行してレンダリングする Blender の最大数。増やすと速くなるがメモリを多く使う（変更すると再起動する） |
 | Thumbnail Resolution | 150 | プレビューの解像度。下げると更新が速くなる |
 | Background | チェッカー | 透明な部分の背景（チェッカー柄 / 単色） |

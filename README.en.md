@@ -109,7 +109,7 @@ Open **Preferences > Add-ons > NodePreview-Optimiz** to change the following set
 | Update During Animation Playback | On | Whether previews keep updating during animation playback |
 | Thumbnail Scale | 50% | Size of the previews in the node editor |
 | Vertical Offset | 5 | Vertical distance between a node and its preview |
-| Surface Preview Shape | Sphere | Shape used for BSDF and similar nodes when the shape is Auto (sphere / cube / monkey) |
+| Surface Preview Shape | Sphere | Shape used for BSDF and similar nodes when the shape is Auto (plane / sphere / cube / monkey). Other nodes always use a plane |
 | Max Background Processes | 2 | Maximum number of Blender processes rendering in parallel. Higher is faster but uses more memory (changing it restarts them) |
 | Thumbnail Resolution | 150 | Resolution of the previews. Lower values update faster |
 | Background | Checkerboard | Background behind transparent parts (checkerboard / solid color) |

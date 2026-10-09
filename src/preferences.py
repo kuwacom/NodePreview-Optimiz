@@ -89,13 +89,16 @@ class NodePreviewOptimizPreferences(AddonPreferences):
 
     surface_preview_shape: EnumProperty(
         name="Surface Preview Shape",
+        # 保存済みの設定の値が変わらないよう、既存の番号は変えずに後ろへ追加する
         items=(
+            ("PLANE", "Plane", "Flat Plane", "MESH_PLANE", 3),
             ("SPHERE", "Sphere", "Sphere", "MESH_UVSPHERE", 0),
             ("CUBE", "Cube", "Cube", "MESH_CUBE", 1),
             ("MONKEY", "Monkey", "Monkey (Suzanne)", "MESH_MONKEY", 2),
         ),
         default="SPHERE",
-        description="Shape used for surface (BxDF) nodes when their preview object is set to Auto",
+        description="Shape used for surface (BxDF) nodes when their preview object is set to Auto. "
+        "Other nodes always use a plane",
     )
 
     def update_max_background_processes(self, context):
