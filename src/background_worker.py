@@ -1,7 +1,8 @@
 #
-#     This file is part of Node Preview Reborn, a fork of NodePreview.
+#     This file is part of NodePreview-Optimiz, a fork of Node Preview Reborn.
 #     Copyright (C) 2021 Simon Wendsche
 #     Copyright (C) 2026 Guillaume Henrion aka GYOMH (fork/modifications)
+#     Copyright (C) 2026 kuwacom (NodePreview-Optimiz)
 #
 #     This program is free software: you can redistribute it and/or modify
 #     it under the terms of the GNU General Public License as published by
@@ -24,8 +25,12 @@ from time import perf_counter, time
 
 import bpy
 import numpy as np
+from bpy_extras.image_utils import load_image
 
-from . import THUMB_CHANNEL_COUNT, bpy_extras_image_utils, get_image_linking_info, messages
+from .lib import messages
+from .lib.constants import ID_PREFIX, THUMB_CHANNEL_COUNT
+from .lib.image_utils import get_image_linking_info
+from .lib.logger import background_print
 
 jobs = queue.LifoQueue()
 results = queue.SimpleQueue()
@@ -35,12 +40,11 @@ free_requested = False
 stop_requested = False
 current_blend_abspath = ""
 
-COLORSPACES_SUPPORTED = {"sRGB", "Raw", "Non-Color"}
+# 4.0 で Raw は無くなり、リニアは Linear Rec.709 に改名された
+COLORSPACES_SUPPORTED = {"sRGB", "Linear Rec.709", "Non-Color"}
 COLORSPACES_GAMMA_CORRECTED = {"sRGB", "Filmic sRGB"}
-
-
-def background_print(*args, **kwargs):
-    print("[NodePreview BG Process]", *args, **kwargs)
+# 読み込んだ画像の元パスを覚えておくカスタムプロパティ名
+IMAGE_ABSPATH_KEY = f"{ID_PREFIX}_abspath"
 
 
 def free():
@@ -144,7 +148,7 @@ def run(port, authkey):
 
             if success:
                 elapsed = perf_counter() - start
-                background_print("job done in %.3f s" % elapsed)
+                background_print(f"job done in {elapsed:.3f} s")
                 results.put(result)
         except queue.Empty:
             continue
@@ -226,7 +230,7 @@ def do(job):
                 need_to_load = True
             else:
                 old_image = bpy.data.images[image_name]
-                old_abspath = old_image.get("nodepreview_abspath", "")
+                old_abspath = old_image.get(IMAGE_ABSPATH_KEY, "")
                 # Ignore images without old abspath. These were linked in successfully already
                 if old_abspath and old_abspath != abspath:
                     background_print("replacing image", image_name, "because the path changed")
@@ -241,7 +245,7 @@ def do(job):
                 # Load full resolution image and scale it down.
                 # I'm copying the loaded and scaled image pixels into a new image because of this Blender bug:
                 # https://developer.blender.org/T85772 (it would cause the scaled image to revert back to full size after rendering)
-                temp_image = bpy_extras_image_utils.load_image(abspath, check_existing=True, force_reload=False)
+                temp_image = load_image(abspath, check_existing=True, force_reload=False)
                 if temp_image:
                     temp_image.scale(thumb_resolution, thumb_resolution)
                     temp_image.name = temp_image.name + "___temp"
@@ -266,7 +270,7 @@ def do(job):
 
                     image.pixels.foreach_set(temp_pixels)
                     bpy.data.images.remove(temp_image)
-                    image["nodepreview_abspath"] = abspath
+                    image[IMAGE_ABSPATH_KEY] = abspath
                     assert image.name == image_name
 
                     if colorspace not in COLORSPACES_SUPPORTED:
@@ -334,7 +338,7 @@ def do(job):
 
 
 def load_render_result(path: str):
-    render_result = bpy_extras_image_utils.load_image(path, check_existing=True, force_reload=True)
+    render_result = load_image(path, check_existing=True, force_reload=True)
     array_size = len(render_result.pixels)
     result_array = np.zeros(array_size, dtype=np.float32)
     render_result.pixels.foreach_get(result_array)

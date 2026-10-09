@@ -1,7 +1,8 @@
 #
-#     This file is part of Node Preview Reborn, a fork of NodePreview.
+#     This file is part of NodePreview-Optimiz, a fork of Node Preview Reborn.
 #     Copyright (C) 2021 Simon Wendsche
 #     Copyright (C) 2026 Guillaume Henrion aka GYOMH (fork/modifications)
+#     Copyright (C) 2026 kuwacom (NodePreview-Optimiz)
 #
 #     This program is free software: you can redistribute it and/or modify
 #     it under the terms of the GNU General Public License as published by
@@ -19,7 +20,15 @@
 import bpy
 from mathutils import Color, Euler, Vector
 
-from . import SUPPORTED_NODE_TREE, UnsupportedNodeException, get_image_linking_info, is_group_node, needs_linking
+from .lib.constants import PROP_NAME, SUPPORTED_NODE_TREE
+from .lib.image_utils import get_image_linking_info, needs_linking
+from .lib.node_utils import (
+    UnsupportedNodeException,
+    get_node_settings,
+    is_eevee,
+    is_group_node,
+    sort_topologically,
+)
 
 IGNORED_NODE_ATTRIBUTES = {
     "color",
@@ -44,45 +53,12 @@ IGNORED_NODE_ATTRIBUTES = {
     "outputs",
     "parent",
     "rna_type",
-    "node_preview",  # Only used in display.py, not in the background thread
+    PROP_NAME,  # Only used in display.py, not in the background thread
     "bytecode",  # OSL script node
     "bytecode_hash",  # OSL script node
 }
 
 node_attributes_cache = {}
-
-
-# node_tree_owner is the material, world etc. that contains the node_tree
-def make_node_key(node, node_tree, node_tree_owner):
-    # The node_tree_owner typename is added because a material and a world could have the same unique name
-    return node.name + node_tree.name_full + type(node_tree_owner).__name__ + node_tree_owner.name_full
-
-
-def sort_topologically(nodes, get_dependent_nodes):
-    # Depth-first search from https://en.wikipedia.org/wiki/Topological_sorting
-    sorted_nodes = []
-    temporary_marks = set()
-    permanent_marks = set()
-    unmarked_nodes = list(nodes)
-
-    def visit(node):
-        if node in permanent_marks:
-            return
-
-        temporary_marks.add(node)
-
-        for subnode in get_dependent_nodes(node):
-            visit(subnode)
-
-        temporary_marks.remove(node)
-        permanent_marks.add(node)
-        unmarked_nodes.remove(node)
-        sorted_nodes.insert(0, node)
-
-    while unmarked_nodes:
-        visit(unmarked_nodes[0])
-
-    return sorted_nodes
 
 
 def to_valid_identifier(node_name: str):
@@ -107,7 +83,7 @@ def _get_attributes(source, ignore_list):
 
 
 def build_node_attributes_cache():
-    node_tree = bpy.data.node_groups.new(".NodePreviewTempTree", "ShaderNodeTree")
+    node_tree = bpy.data.node_groups.new(".NodePreviewOptimizTempTree", "ShaderNodeTree")
 
     for type_str in dir(bpy.types):
         if type_str.startswith("__"):
@@ -117,7 +93,7 @@ def build_node_attributes_cache():
             if issubclass(getattr(bpy.types, type_str), bpy.types.ShaderNode):
                 node = node_tree.nodes.new(type_str)
                 node_attributes_cache[type_str] = _get_attributes(node, IGNORED_NODE_ATTRIBUTES)
-        except:
+        except Exception:
             # Some classes like ShaderNode or node groups can't be instanced by node_tree.nodes.new(type_str)
             # Also, getattr(bpy.types, type_str) threw an error for one user, possibly a custom Blender build
             pass
@@ -159,17 +135,9 @@ def node_to_script(
         "background_tex.inputs[2].default_value = " + str(background_colors[1]),
     ]
 
-    if engine == "BLENDER_EEVEE" and isinstance(node_tree_owner, bpy.types.Material):
-        script += [
-            f"material.use_backface_culling = {node_tree_owner.use_backface_culling}",
-            f"material.blend_method = {repr(node_tree_owner.blend_method)}",
-            f"material.alpha_threshold = {node_tree_owner.alpha_threshold}",
-            f"material.show_transparent_back = {node_tree_owner.show_transparent_back}",
-            f"material.use_screen_refraction = {node_tree_owner.use_screen_refraction}",
-            f"material.refraction_depth = {node_tree_owner.refraction_depth}",
-            f"material.use_sss_translucency = {node_tree_owner.use_sss_translucency}",
-            # TODO Lineart?
-        ]
+    if is_eevee(engine) and isinstance(node_tree_owner, bpy.types.Material):
+        script += [f"material.{attr} = {value!r}" for attr, value in _get_eevee_material_settings(node_tree_owner)]
+        # TODO Lineart?
 
     images_to_load = set()
     images_to_link = set()
@@ -201,11 +169,12 @@ def node_to_script(
     outputs = node.outputs
 
     # Link the node
-    if node.node_preview.auto_choose_output:
+    settings = get_node_settings(node)
+    if settings.auto_choose_output:
         first_enabled = _find_first_enabled_socket(outputs)
         output_index = _find_first_linked_socket(outputs, fallback=first_enabled)
     else:
-        output_index = node.node_preview.output_index
+        output_index = settings.output_index
 
     if outputs[output_index].name == "Volume":
         input_index = 1
@@ -222,21 +191,37 @@ def node_to_script(
     return "\n".join(script), images_to_load, images_to_link
 
 
-def _socket_interfaces_to_script(socket_interfaces, attr_name, script):
-    for socket_interface in socket_interfaces:
-        script.append(
-            f"socket = node_tree.{attr_name}.new({repr(socket_interface.bl_socket_idname)}, {repr(socket_interface.name)})"
-        )
+# EEVEE Next（4.2）で非推奨になったマテリアル設定の置き換え先
+EEVEE_MATERIAL_SETTINGS = ("use_backface_culling", "surface_render_method", "use_transparency_overlap")
+EEVEE_MATERIAL_SETTINGS_RAYTRACE = ("use_raytrace_refraction",)
+# 4.0 / 4.1（旧 EEVEE）にしか無い設定
+EEVEE_LEGACY_MATERIAL_SETTINGS = (
+    "use_backface_culling",
+    "blend_method",
+    "alpha_threshold",
+    "show_transparent_back",
+    "use_screen_refraction",
+    "refraction_depth",
+    "use_sss_translucency",
+)
 
-        if hasattr(socket_interface, "default_value"):
-            value, success = _property_to_string(socket_interface.default_value)
-            if success:
-                script.append(f"with suppress(Exception): socket.default_value = {value}")
-            else:
-                print("Conversion of default_value failed:", socket_interface.name, socket_interface.default_value)
+
+def _get_eevee_material_settings(material):
+    """
+    ### _get_eevee_material_settings
+    プレビュー用マテリアルにコピーする EEVEE 向けの設定を集める
+
+    @param material - ユーザーのマテリアル
+    @returns (プロパティ名, 値) の一覧
+    """
+    if hasattr(material, "surface_render_method"):
+        attrs = EEVEE_MATERIAL_SETTINGS + EEVEE_MATERIAL_SETTINGS_RAYTRACE
+    else:
+        attrs = EEVEE_LEGACY_MATERIAL_SETTINGS
+    return [(attr, getattr(material, attr)) for attr in attrs if hasattr(material, attr)]
 
 
-def _socket_interfaces_to_script_Blender4(interface, script):
+def _socket_interfaces_to_script(interface, script):
     for item in interface.items_tree:
         if item.item_type == "SOCKET":
             valid_idnames = {"NodeSocketVector", "NodeSocketShader", "NodeSocketFloat", "NodeSocketColor"}
@@ -307,11 +292,7 @@ def node_groups_to_script(node_groups):
         group_script.append(f"node_group_mapping[{repr(unique_name)}] = node_tree")
 
         # Create group inputs and outputs
-        if bpy.app.version >= (4, 0, 0):
-            _socket_interfaces_to_script_Blender4(group.interface, group_script)
-        else:
-            _socket_interfaces_to_script(group.inputs, "inputs", group_script)
-            _socket_interfaces_to_script(group.outputs, "outputs", group_script)
+        _socket_interfaces_to_script(group.interface, group_script)
 
         for node in group.nodes:
             node_script, sub_images_to_load, sub_images_to_link = _single_node_to_script(node, group_hashes)
@@ -410,11 +391,11 @@ def _node_properties_to_script(node, node_identifier, is_OSL_node, script, group
             attributes = _get_attributes(node, IGNORED_NODE_ATTRIBUTES)
             node_attributes_cache[node.bl_idname] = attributes
         else:
-            raise UnsupportedNodeException(f"Unsupported node type: {node.bl_idname}")
+            raise UnsupportedNodeException(f"Unsupported node type: {node.bl_idname}") from None
 
     # A change of the counter causes a change in the script hash, which
     # automatically updates this node and all dependent nodes
-    script.append(f"# {node.node_preview.force_update_counter}")
+    script.append(f"# {get_node_settings(node).force_update_counter}")
 
     _attributes_to_script(attributes, node, node_identifier, script)
 
@@ -467,7 +448,7 @@ def _node_properties_to_script(node, node_identifier, is_OSL_node, script, group
         # Ramp has two elements by default, but user might have deleted one, so remove it
         script.append(f"{node_identifier}.color_ramp.elements.remove({node_identifier}.color_ramp.elements[0])")
         # Then re-add as many elements as needed
-        for i in range(len(ramp.elements) - 1):
+        for _ in range(len(ramp.elements) - 1):
             script.append(f"{node_identifier}.color_ramp.elements.new(0)")
 
         for i in range(len(ramp.elements)):
@@ -482,7 +463,7 @@ def _node_properties_to_script(node, node_identifier, is_OSL_node, script, group
 
         for curve_index, curve in enumerate(mapping.curves):
             # Curves have 2 points by default, and a minimum of 2, so we ignore the first 2 points here
-            for i in range(2, len(curve.points)):
+            for _ in range(2, len(curve.points)):
                 script.append(f"{node_identifier}.mapping.curves[{curve_index}].points.new(0, 0)")
 
             for point_index, point in enumerate(curve.points):
@@ -516,7 +497,7 @@ def _node_properties_to_script(node, node_identifier, is_OSL_node, script, group
                     osl_script = file.read()
                     textblock_name = "loaded_from_file"
                     success = True
-            except:
+            except OSError:
                 pass
         else:
             raise UnsupportedNodeException("Unsupported OSL script node mode: " + node.mode)
@@ -575,7 +556,7 @@ def _single_node_to_script(node, group_hashes):
 
     # Input sockets
     for i, socket in enumerate(node.inputs):
-        if socket.name == "Scale" and node.node_preview.ignore_scale:
+        if socket.name == "Scale" and get_node_settings(node).ignore_scale:
             continue
 
         if not socket.is_linked and hasattr(socket, "default_value"):
@@ -640,7 +621,7 @@ def _make_node_creation_script(node, group_hashes):
 
     # Input sockets
     for i, socket in enumerate(node.inputs):
-        if socket.name == "Scale" and node.node_preview.ignore_scale:
+        if socket.name == "Scale" and get_node_settings(node).ignore_scale:
             continue
 
         if not socket.is_linked and hasattr(socket, "default_value"):
@@ -675,7 +656,7 @@ def _make_node_linking_script(
     node_name_string = repr(node.name)
 
     for i, socket in enumerate(node.inputs):
-        if socket.name == "Scale" and node.node_preview.ignore_scale:
+        if socket.name == "Scale" and get_node_settings(node).ignore_scale:
             continue
 
         if socket.is_linked:

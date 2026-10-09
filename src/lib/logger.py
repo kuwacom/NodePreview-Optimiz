@@ -17,29 +17,20 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Blender がアドオンとして読み込む入口。実装は src にある
-
-bl_info = {
-    "name": "NodePreview-Optimiz",
-    "author": "Guillaume Henrion aka GYOMH (based on Node Preview by Simon Wendsche)",
-    "version": (1, 0, 1),
-    "blender": (4, 0, 0),
-    "category": "Node",
-    "location": "Shader Node Editor",
-    "description": "Displays rendered thumbnails above shader nodes",
-    "warning": "",
-    "doc_url": "",
-    "tracker_url": "",
-}
+from .constants import ADDON_NAME
 
 
-def register():
-    from . import src
+def addon_print(*args, **kwargs):
+    """
+    ### addon_print
+    メイン側（UI のある Blender）のログをシステムコンソールに出す
+    """
+    print(f"[{ADDON_NAME}]", *args, **kwargs)
 
-    src.register()
 
-
-def unregister():
-    from . import src
-
-    src.unregister()
+def background_print(*args, **kwargs):
+    """
+    ### background_print
+    裏プロセス側のログをシステムコンソールに出す（Enable Debug Output が有効な時だけ表示される）
+    """
+    print(f"[{ADDON_NAME} BG Process]", *args, **kwargs)

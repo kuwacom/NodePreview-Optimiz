@@ -20,7 +20,7 @@ package = false
 [tool.ruff]
 target-version = "py310"
 line-length = 120
-extend-exclude = ["data", "shaders", "images"]
+extend-exclude = ["src/data", "src/shaders", "images"]
 
 [tool.ruff.lint]
 select = [
@@ -31,6 +31,8 @@ select = [
     "UP",  # 新しい構文への書き換え
     "B",   # バグになりやすい書き方
 ]
+# コードの行長は formatter が揃えるため、折り返せないコメントや埋め込みスクリプトの長さは許容する
+ignore = ["E501"]
 
 [tool.ruff.lint.isort]
 # アドオン内の相対 import を外部パッケージと区別するため

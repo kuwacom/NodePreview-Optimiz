@@ -17,29 +17,22 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Blender がアドオンとして読み込む入口。実装は src にある
+# 描画ハンドラーと、裏プロセスの結果を受け取るスレッドの両方から参照するサムネイルの状態
 
-bl_info = {
-    "name": "NodePreview-Optimiz",
-    "author": "Guillaume Henrion aka GYOMH (based on Node Preview by Simon Wendsche)",
-    "version": (1, 0, 1),
-    "blender": (4, 0, 0),
-    "category": "Node",
-    "location": "Shader Node Editor",
-    "description": "Displays rendered thumbnails above shader nodes",
-    "warning": "",
-    "doc_url": "",
-    "tracker_url": "",
-}
+from . import update_tracker
+
+thumbnails = {}  # node_key : Thumbnail
+cached_nodes = {}  # node_key : hash(node_script), timestamp
+# Used to decide wether to update only the first or second part of the nodes in a tree in the draw handler
+update_first_part = {}  # node_tree : Bool
 
 
-def register():
-    from . import src
-
-    src.register()
-
-
-def unregister():
-    from . import src
-
-    src.unregister()
+def free():
+    """
+    ### free
+    保持しているサムネイルとキャッシュを全て捨てる
+    """
+    cached_nodes.clear()
+    update_first_part.clear()
+    thumbnails.clear()
+    update_tracker.reset()
