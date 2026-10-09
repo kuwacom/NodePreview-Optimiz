@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "nodepreview_optimiz"
-version = "1.0.1"
+version = "2.1.0"
 name = "NodePreview-Optimiz"
 tagline = "Displays rendered thumbnails above shader nodes"
 maintainer = "kuwacom"

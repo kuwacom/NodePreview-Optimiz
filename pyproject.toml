@@ -1,6 +1,6 @@
 [project]
 name = "nodepreview-optimiz"
-version = "1.0.1"
+version = "2.1.0"
 description = "Blender のシェーダーノードの上にプレビューを表示するアドオン"
 readme = "README.md"
 license = "GPL-3.0-or-later"
