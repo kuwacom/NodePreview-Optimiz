@@ -14,7 +14,7 @@ A Blender add-on that displays rendered preview images (thumbnails) above shader
 - **Per-node previews**: Shows a rendered image of each shader node's output above the node
 - **Automatic updates**: When you edit a node, the previews of all affected nodes update automatically
 - **Cycles / EEVEE**: Previews are rendered with the current render engine. With EEVEE, EEVEE-only nodes (such as Shader to RGB) are supported too
-- **Plane / sphere**: Textures are shown on a plane and BSDFs on a sphere automatically. You can also switch manually
+- **Preview shapes**: Textures are shown on a plane and BSDFs on a sphere (or a cube / monkey, set in the preferences) automatically. You can also switch manually
 - **Leaves your files untouched**: Nothing is written to the `.blend` file, so people without the add-on can open it as usual
 - **High-DPI displays**: Follows Blender's resolution scale setting
 - **English / Japanese**: Preferences, menus and text on thumbnails follow Blender's language setting
@@ -39,8 +39,8 @@ The following features have been added or improved compared to the original proj
 - **More efficient rendering**: Outdated jobs are dropped before being sent, nodes on screen are rendered first, and node groups are reused in the background process
 - **Memory cleanup**: Thumbnails of deleted nodes are discarded
 - **Startup fix**: Fixed previews not appearing when Blender was started by opening a `.blend` file
-- **No folder name restriction**: The add-on works even if its folder name contains a hyphen
-- **Version support**: Supports Blender 4.0–5.2, with deprecated APIs replaced by their newer equivalents. Previews are rendered with EEVEE on 4.2–4.5 too
+- **Extension format**: Uses the `blender_manifest.toml` format of Blender 4.2 and later. The background process no longer relies on enabling the add-on and is loaded directly from its folder
+- **Version support**: Supports Blender 4.2–5.2, with deprecated APIs replaced by their newer equivalents. Previews are rendered with EEVEE on 4.2–4.5 too
 - **Error logging**: Startup failures and crashes of the background process are printed to the system console in detail
 
 ## Installation
@@ -52,12 +52,15 @@ The following features have been added or improved compared to the original proj
 3. From the `⌄` menu at the top right, choose **Install from Disk...** and select the zip from step 1
 4. Enable **NodePreview-Optimiz** in the list
 
-### Option 2: Place it in the add-ons folder
+### Option 2: Place it in the extensions folder
 
-1. Download and extract the repository as a zip, or `git clone` it
-2. Put the whole folder into Blender's add-ons folder
-   - On Windows: `%APPDATA%\Blender Foundation\Blender\5.2\scripts\addons\`
+1. `git clone` the repository
+2. Put the whole folder, named `nodepreview_optimiz`, into Blender's user extensions folder (a symbolic link works too)
+   - On Windows: `%APPDATA%\Blender Foundation\Blender\5.2\extensions\user_default\`
 3. Start Blender and enable **NodePreview-Optimiz** in **Edit > Preferences > Add-ons**
+
+> [!NOTE]
+> Blender versions before 4.2 are not supported. For 4.0 / 4.1, use the version from before the move to the extension format (`7f440e3` or earlier)
 
 > [!WARNING]
 > If you enable this together with the original **Node Preview** or **Node Preview Reborn**, previews are drawn twice. Enable only one of them
@@ -71,12 +74,20 @@ Open the **Shader Editor** (for example in the **Shading** workspace) and previe
 - Use the button at the right end of the node editor header
 - You can also use the **NodePreview-Optimiz** tab in the sidebar (`N` key)
 
+### Shape selection, pause and manual refresh
+
+- Shape buttons are in the sidebar and the header popover. The current shape of the selected nodes is highlighted, and "Mixed" is shown when their settings differ
+- The header buttons and the preferences control showing selected nodes only, pausing updates and refreshing manually. Manual refresh also works while paused
+- If the background process crashes and can't be restarted, the header shows "Preview stopped". Use the button in the popover to restart it
+
 ### Shortcuts
 
 | Key | Target | Action |
 | --- | --- | --- |
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> | Selected nodes | Toggle preview visibility |
-| <kbd>Ctrl</kbd> + <kbd>P</kbd> | Selected nodes | Switch the preview between plane and sphere |
+| <kbd>Ctrl</kbd> + <kbd>P</kbd> | Selected nodes | Cycle the preview shape: plane, sphere, cube, monkey |
+| <kbd>Shift</kbd> + <kbd>P</kbd> | Active node | Show the preview enlarged at a higher resolution (close with <kbd>Esc</kbd> or a click) |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Whole tree | Toggle showing previews of selected nodes only |
 | <kbd>Shift</kbd> + <kbd>O</kbd> | Active node | Choose which output socket to preview |
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd> | Selected nodes | Ignore the Scale of procedural textures in the preview |
 
@@ -93,9 +104,13 @@ Open **Preferences > Add-ons > NodePreview-Optimiz** to change the following set
 | Setting | Default | Description |
 | --- | --- | --- |
 | Previews Visible by Default | On | Whether new nodes show a preview from the start |
+| Selected Nodes Only | Off | Whether to show and render previews of selected nodes only. Handy in large trees |
+| Pause Updates | Off | Whether to stop updating previews when nodes are edited. Existing thumbnails stay visible |
 | Update During Animation Playback | On | Whether previews keep updating during animation playback |
 | Thumbnail Scale | 50% | Size of the previews in the node editor |
 | Vertical Offset | 5 | Vertical distance between a node and its preview |
+| Surface Preview Shape | Sphere | Shape used for BSDF and similar nodes when the shape is Auto (sphere / cube / monkey) |
+| Max Background Processes | 2 | Maximum number of Blender processes rendering in parallel. Higher is faster but uses more memory (changing it restarts them) |
 | Thumbnail Resolution | 150 | Resolution of the previews. Lower values update faster |
 | Background | Checkerboard | Background behind transparent parts (checkerboard / solid color) |
 | Show Help Messages | On | Whether to show hints above nodes |
@@ -125,7 +140,7 @@ flowchart LR
 
 1. On every node editor redraw, each node is converted into a Python script that recreates just that node
 2. Only nodes whose script changed since last time are sent as jobs to a background Blender (`blender -b`)
-3. The background Blender rebuilds the nodes in the `src/data/previewscene.blend` scene, renders a single plane or sphere, and returns the result
+3. The background Blender rebuilds the nodes in the `src/data/previewscene.blend` scene, renders a single plane or 3D shape (sphere, cube or monkey), and returns the result
 4. The returned image is drawn above the node with the GPU
 
 Temporary thumbnail files are stored in `BlenderNodePreviewOptimiz_<process ID>` inside the OS temp folder. Folders not updated for more than 24 hours are deleted when Blender exits.
@@ -150,6 +165,10 @@ uv run ruff format
 # Lint (use --fix to apply automatic fixes)
 uv run ruff check
 uv run ruff check --fix
+
+# Validate the extension manifest and build the installable zip
+blender --command extension validate
+blender --command extension build
 ```
 
 The change history is kept in [CHANGELOG.md](CHANGELOG.md)

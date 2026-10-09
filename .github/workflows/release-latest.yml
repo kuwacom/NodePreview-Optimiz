@@ -15,7 +15,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ADDON_DIR: NodePreview-Optimiz
   ZIP_NAME: NodePreview-Optimiz.zip
 
 jobs:
@@ -27,26 +26,16 @@ jobs:
       - name: Read add-on version
         id: version
         run: |
-          # bl_info は Blender がコードを実行せずに読むリテラルなので、同じく ast で読む
-          version=$(python3 - <<'EOF'
-          import ast
-          tree = ast.parse(open("__init__.py", encoding="utf-8").read())
-          bl_info = next(
-              node.value for node in tree.body
-              if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "bl_info"
-          )
-          print(".".join(map(str, ast.literal_eval(bl_info)["version"])))
-          EOF
-          )
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("blender_manifest.toml", "rb"))["version"])')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build add-on zip
         run: |
-          # zip の中のフォルダ名がそのままアドオンのモジュール名になるため、ブランチ名などが付かないよう揃える
-          mkdir -p "dist/$ADDON_DIR"
-          cp -r __init__.py src LICENSE README.md README.en.md CHANGELOG.md "dist/$ADDON_DIR/"
+          # エクステンションの zip は、フォルダで包まずに blender_manifest.toml を直下に置く
+          mkdir -p dist/files
+          cp -r blender_manifest.toml __init__.py src LICENSE README.md README.en.md CHANGELOG.md dist/files/
           find dist -name "__pycache__" -type d -prune -exec rm -rf {} +
-          (cd dist && zip -r -q "$ZIP_NAME" "$ADDON_DIR")
+          (cd dist/files && zip -r -q "../$ZIP_NAME" .)
           unzip -l "dist/$ZIP_NAME"
 
       - name: Publish latest release
@@ -63,5 +52,5 @@ jobs:
             --title "Latest (v$VERSION, $short_sha)" \
             --notes "main の最新コミット ($GITHUB_SHA) から自動で作成したビルドです。
 
-          Blender の **編集 > プリファレンス > アドオン** の **ディスクからインストール...** で、この zip をそのまま選んでください。" \
+          Blender の **編集 > プリファレンス > アドオン** の右上のメニューにある **ディスクからインストール...** で、この zip をそのまま選んでください。" \
             --latest

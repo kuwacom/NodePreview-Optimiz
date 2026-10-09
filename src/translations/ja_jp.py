@@ -24,12 +24,6 @@ DEFAULT = "*"
 OPERATOR = "Operator"
 
 TRANSLATIONS = {
-    # アドオン一覧（bl_info）
-    (
-        DEFAULT,
-        "Displays rendered thumbnails above shader nodes",
-    ): "シェーダーノードの上にレンダリングしたサムネイルを表示します",
-    (DEFAULT, "Shader Node Editor"): "シェーダーノードエディター",
     # アドオン設定
     (DEFAULT, "Previews Visible by Default"): "プレビューを最初から表示",
     (

@@ -17,20 +17,7 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Blender がアドオンとして読み込む入口。実装は src にある
-
-bl_info = {
-    "name": "NodePreview-Optimiz",
-    "author": "Guillaume Henrion aka GYOMH (based on Node Preview by Simon Wendsche)",
-    "version": (1, 0, 1),
-    "blender": (4, 0, 0),
-    "category": "Node",
-    "location": "Shader Node Editor",
-    "description": "Displays rendered thumbnails above shader nodes",
-    "warning": "",
-    "doc_url": "",
-    "tracker_url": "",
-}
+# Blender がエクステンションとして読み込む入口。実装は src にあり、情報は blender_manifest.toml にある
 
 
 def register():

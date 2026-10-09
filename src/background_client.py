@@ -39,7 +39,7 @@ from bpy.app.handlers import persistent
 from . import preview_cache, update_tracker
 from .lib import messages
 from .lib.constants import (
-    ADDON_PACKAGE,
+    ADDON_ROOT_DIR,
     PREVIEW_SCENE_PATH,
     SUPPORTED_NODE_TREE,
     TEMP_DIR_PREFIX,
@@ -185,34 +185,24 @@ class BackgroundProcess:
                 else:
                     raise
 
-        # import 文ではフォルダ名にハイフンなどを含むと構文エラーになるため、importlib で読み込む
-        worker_module = f"{ADDON_PACKAGE}.src.background_worker"
+        # エクステンションのモジュール名（bl_ext.…）は --addons で有効化しなくても、フォルダの場所から読み込める
+        # フォルダ名にハイフンなどを含むと import 文は構文エラーになるため、importlib で読み込む
+        package_name = os.path.basename(ADDON_ROOT_DIR)
+        worker_module = f"{package_name}.src.background_worker"
         process_args = [
             bpy.app.binary_path,
             "--factory-startup",
-            "--addons",
-            ADDON_PACKAGE,
             "-b",  # Run in background without UI
             PREVIEW_SCENE_PATH,
             "--python-expr",
-            f"import importlib; importlib.import_module({worker_module!r}).run({port}, {authkey})",
+            f"import importlib, sys; sys.path.insert(0, {os.path.dirname(ADDON_ROOT_DIR)!r}); "
+            f"importlib.import_module({worker_module!r}).run({port}, {authkey})",
         ]
 
-        env_copy = os.environ.copy()
-
-        for custom_script_dir in bpy.context.preferences.filepaths.script_directories:
-            # Only use the custom script dir if the addon is installed there. If BLENDER_USER_SCRIPTS is set, but the addon
-            # is installed in the default location, the background process will fail to import the addon.
-            if os.path.exists(os.path.join(custom_script_dir.directory, "addons", ADDON_PACKAGE)):
-                env_copy["BLENDER_USER_SCRIPTS"] = custom_script_dir.directory
-                break
-
         if get_preferences().enable_debug_output:
-            self.process = subprocess.Popen(process_args, env=env_copy)
+            self.process = subprocess.Popen(process_args)
         else:
-            self.process = subprocess.Popen(
-                process_args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, env=env_copy
-            )
+            self.process = subprocess.Popen(process_args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         # 接続前に落ちると accept() が戻らないため、終了を別スレッドで見張って listener を閉じる
         threading.Thread(target=self._wait_for_exit, daemon=True).start()
 

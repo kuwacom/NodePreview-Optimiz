@@ -18,15 +18,20 @@
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import sys
+import tomllib
 
-# アドオンのルートモジュール名（= インストール先のフォルダ名）
-# AddonPreferences の bl_idname や、裏プロセスでの読み込みに使う
-ADDON_PACKAGE = __name__.split(".")[0]
-# 表示名は bl_info を唯一の定義元にする（Blender は bl_info を実行せずに読むため、ルートに直書きが必要）
-ADDON_NAME = sys.modules[ADDON_PACKAGE].bl_info["name"]
+# アドオンのルートモジュール名
+# エクステンションとして入れた場合は bl_ext.<リポジトリ>.<id> になるため、固定の文字列にはできない
+# AddonPreferences の bl_idname や preferences.addons のキーに使う
+ADDON_PACKAGE = __name__.rsplit(".", 3)[0]
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+ADDON_ROOT_DIR = os.path.dirname(SRC_DIR)
+
+# 表示名は blender_manifest.toml を唯一の定義元にする
+with open(os.path.join(ADDON_ROOT_DIR, "blender_manifest.toml"), "rb") as manifest_file:
+    ADDON_NAME = tomllib.load(manifest_file)["name"]
+
 SHADERS_DIR = os.path.join(SRC_DIR, "shaders")
 PREVIEW_SCENE_PATH = os.path.join(SRC_DIR, "data", "previewscene.blend")
 

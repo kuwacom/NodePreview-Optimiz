@@ -1,0 +1,38 @@
+schema_version = "1.0.0"
+
+id = "nodepreview_optimiz"
+version = "1.0.1"
+name = "NodePreview-Optimiz"
+tagline = "Displays rendered thumbnails above shader nodes"
+maintainer = "kuwacom"
+type = "add-on"
+
+website = "https://github.com/kuwacom/NodePreview-Optimiz"
+tags = ["Node", "Material"]
+
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = [
+  "2021 Simon Wendsche",
+  "2026 Guillaume Henrion aka GYOMH",
+  "2026 kuwacom",
+]
+
+# サムネイルの保存先（一時フォルダ）や、読み込んだ画像のパスを扱うため
+[permissions]
+files = "Read images and write thumbnails to the temporary directory"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/.github/",
+  "/.venv/",
+  "/.ruff_cache/",
+  "/images/",
+  "/dist/",
+  "/pyproject.toml",
+  "/uv.lock",
+  ".gitignore",
+  "*.zip",
+]
