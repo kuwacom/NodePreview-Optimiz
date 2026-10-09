@@ -4,7 +4,11 @@
 
 A Blender add-on that displays rendered preview images (thumbnails) above shader nodes
 
-![NodePreview-Optimiz screenshot](./images/preview.png)
+![NodePreview-Optimiz thumbnail](./images/thumbnail.png)
+
+https://github.com/user-attachments/assets/c85764b9-52e3-40fd-a4a1-9a4914386591
+
+From startup to the first previews, and a preview updating after a value is changed
 
 > [!NOTE]
 > Tested on **Blender 5.2**
@@ -69,6 +73,8 @@ The following features have been added or improved compared to the original proj
 
 Open the **Shader Editor** (for example in the **Shading** workspace) and previews appear above each node.
 
+![Previews shown above the nodes, with the add-on menu open in the sidebar](./images/preview-02.png)
+
 ### Showing / hiding previews for the whole tree
 
 - Use the button at the right end of the node editor header
@@ -100,6 +106,8 @@ Open the **Shader Editor** (for example in the **Shading** workspace) and previe
 ## Settings
 
 Open **Preferences > Add-ons > NodePreview-Optimiz** to change the following settings.
+
+![The add-on preferences](./images/preview-01.png)
 
 | Setting | Default | Description |
 | --- | --- | --- |
