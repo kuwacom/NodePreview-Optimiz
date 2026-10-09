@@ -219,7 +219,8 @@ def do(job):
                 background_print(".blend doesn't exist:", blendpath)
                 images_failed_to_link.put(image_names)
 
-        error_message = ""
+        # メイン側で今の言語に訳せるよう、(書式文字列, 引数) の形で返す
+        error_message = None
         full_error_log = ""
 
         # Load images from disk
@@ -274,7 +275,7 @@ def do(job):
                     assert image.name == image_name
 
                     if colorspace not in COLORSPACES_SUPPORTED:
-                        error_message = "Unsupported Colorspace: " + colorspace
+                        error_message = ("Unsupported Colorspace: {}", (colorspace,))
 
         node_tree = bpy.data.materials["Material"].node_tree
         starting_nodes = [node.name for node in node_tree.nodes]
@@ -283,7 +284,7 @@ def do(job):
             script = "import bpy; import mathutils; from contextlib import suppress; " + script
             exec(script)
         except Exception as error:
-            error_message = str(error)
+            error_message = ("{}", (str(error),))
 
             full_error_log += "\nScript: --------------------\n"
             for i, line in enumerate(script.split("\n")):
@@ -321,12 +322,12 @@ def do(job):
             name, library_path, needs_linking, abspath = image_info
             if (name, library_path) not in bpy.data.images:
                 if needs_linking:
-                    error_message = "Save .blend to render preview"
+                    error_message = ("Save .blend to render preview", ())
                 else:
                     if os.path.exists(abspath):
-                        error_message = "Could not load image"
+                        error_message = ("Could not load image", ())
                     else:
-                        error_message = "File not found"
+                        error_message = ("File not found", ())
 
         node_timestamps[node_key] = time()
         return True, (node_key, result_array, thumb_resolution, timestamp, error_message, full_error_log)

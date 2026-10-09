@@ -31,6 +31,7 @@ from bpy.types import SpaceNodeEditor
 from . import background_client, node_converter, preview_cache, scene_converter, update_tracker
 from .lib.constants import BACKGROUND_PATTERNS, SUPPORTED_NODE_TREE
 from .lib.editor_utils import get_preferences
+from .lib.i18n import iface_
 from .lib.image_utils import get_blend_abspath, get_image_linking_info, needs_linking
 from .lib.node_utils import (
     SCALE_HELP_THRESHOLDS,
@@ -333,7 +334,7 @@ def handler():
         node_settings = get_node_settings(node)
         if not node_settings.auto_choose_output:
             output = node.outputs[node_settings.output_index].name
-            text_y = draw_text(f"Output: {output}", (text_x, text_y), text_size, scaled_zoom)
+            text_y = draw_text(iface_("Output: {}").format(output), (text_x, text_y), text_size, scaled_zoom)
             text_y += text_size * scaled_zoom * 0.5  # A bit of spacing in case of more text after
 
         if preferences.show_help and "Scale" in node.inputs:
@@ -341,10 +342,10 @@ def handler():
                 threshold = SCALE_HELP_THRESHOLDS[node.bl_idname]
                 if node.inputs["Scale"].is_linked or abs(node.inputs["Scale"].default_value) > threshold:
                     if node_settings.ignore_scale:
-                        text_y = draw_text("Scale ignored", (text_x, text_y), text_size, scaled_zoom)
+                        text_y = draw_text(iface_("Scale ignored"), (text_x, text_y), text_size, scaled_zoom)
                     else:
                         text_y = draw_text(
-                            "Scale can be ignored\nwith Ctrl+Shift+i", (text_x, text_y), text_size, scaled_zoom
+                            iface_("Scale can be ignored\nwith Ctrl+Shift+i"), (text_x, text_y), text_size, scaled_zoom
                         )
             except KeyError:
                 # Node doesn't have a known scale threshold, don't show the help message

@@ -25,6 +25,7 @@ import numpy as np
 from gpu_extras.batch import batch_for_shader
 
 from .lib.constants import ID_PREFIX, SHADERS_DIR
+from .lib.i18n import format_message
 from .lib.logger import addon_print
 
 _shader = None
@@ -80,7 +81,7 @@ class Thumbnail:
     裏プロセスから受け取ったサムネイル 1 枚分の画素と、それを描画するためのテクスチャ
     """
 
-    def __init__(self, pixels, width, height, channel_count, text):
+    def __init__(self, pixels, width, height, channel_count, message):
         self.pixels = pixels
         # The thumbnail is created in a thread, but the texture has to be initialized
         # in the main thread, so we can't do it here yet. init_texture() must be called
@@ -90,7 +91,8 @@ class Thumbnail:
         self.width = width
         self.height = height
         self.channel_count = channel_count
-        self.text = text
+        # 言語の切り替えにすぐ追従できるよう、訳すのは描画時に行う
+        self.message = message
 
     def init_texture(self):
         get_shader()
@@ -131,9 +133,10 @@ class Thumbnail:
         )
         batch.draw(shader)
 
-        if self.text:
+        text = format_message(self.message)
+        if text:
             position = (text_x, top_left[1] + 3 * scaled_zoom)
-            draw_text(self.text, position, 10, scaled_zoom)
+            draw_text(text, position, 10, scaled_zoom)
 
 
 def draw_text(text, position, font_size, scaled_zoom):

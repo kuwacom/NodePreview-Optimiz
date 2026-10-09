@@ -28,6 +28,7 @@ from .lib.editor_utils import (
     get_preferences,
     poll_node_tree,
 )
+from .lib.i18n import iface_, rpt_, tip_
 from .lib.node_utils import get_node_settings, needs_sphere_preview
 
 
@@ -66,7 +67,7 @@ class NODEPREVIEW_OPTIMIZ_OT_toggle_preview(bpy.types.Operator):
         selection = get_selected_nodes(context)
 
         if not selection:
-            self.report({"ERROR"}, "No nodes selected")
+            self.report({"ERROR"}, rpt_("No nodes selected"))
             return {"CANCELLED"}
 
         # If at least one node has the preview enabled, this operator should switch them all off.
@@ -97,7 +98,7 @@ class NODEPREVIEW_OPTIMIZ_OT_toggle_ignore_scale(bpy.types.Operator):
         selection = get_selected_nodes(context)
 
         if not selection:
-            self.report({"ERROR"}, "No nodes selected")
+            self.report({"ERROR"}, rpt_("No nodes selected"))
             return {"CANCELLED"}
 
         for node in selection:
@@ -141,7 +142,7 @@ class NODEPREVIEW_OPTIMIZ_OT_set_output(bpy.types.Operator):
         for socket in node.outputs:
             if socket.enabled:
                 NODEPREVIEW_OPTIMIZ_OT_set_output.output_items.append(
-                    (str(index), socket.name, f"Show preview for output {socket.name}", index)
+                    (str(index), socket.name, tip_("Show preview for output {}").format(socket.name), index)
                 )
                 index += 1
 
@@ -152,7 +153,8 @@ class NODEPREVIEW_OPTIMIZ_OT_set_output(bpy.types.Operator):
         layout = self.layout
         node = get_active_node(context)
 
-        layout.label(text=f'Node: "{node.name}"')
+        # 訳した後の文字列が再度翻訳の対象にならないよう translate=False にする
+        layout.label(text=iface_('Node: "{}"').format(node.name), translate=False)
 
         if node.outputs:
             col = layout.column()
@@ -180,7 +182,7 @@ class NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object(bpy.types.Operator):
         selection = get_selected_nodes(context)
 
         if not selection:
-            self.report({"ERROR"}, "No nodes selected")
+            self.report({"ERROR"}, rpt_("No nodes selected"))
             return {"CANCELLED"}
 
         if any(needs_sphere_preview(node) for node in selection):

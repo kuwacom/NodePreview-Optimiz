@@ -20,7 +20,7 @@
 import bpy
 from bpy.utils import register_class, unregister_class
 
-from . import preferences
+from . import preferences, translations
 
 
 def _ui_modules():
@@ -46,6 +46,8 @@ def register():
         register_class(cls)
 
     if not bpy.app.background:
+        # アドオン設定の画面は遅延登録より前に表示され得るため、翻訳はここで登録する
+        translations.register()
         # persistent=True にしないと起動直後の .blend 読み込みでタイマーが破棄され、登録が行われない
         bpy.app.timers.register(_deferred_register, first_interval=0.3, persistent=True)
 
@@ -61,6 +63,7 @@ def unregister():
                     module.unregister()
                 for cls in reversed(getattr(module, "classes", ())):
                     unregister_class(cls)
+        translations.unregister()
 
     for cls in reversed(preferences.classes):
         unregister_class(cls)
