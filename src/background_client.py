@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import traceback
 from collections import OrderedDict
 from multiprocessing import current_process
 from multiprocessing.connection import Listener
@@ -73,6 +74,8 @@ MAX_CRASHES = 3
 CRASH_WINDOW_SECONDS = 60
 crash_times = []
 gave_up_restarting = False
+# 最後に起きた起動失敗・異常終了の内容（停止中の表示に使う）
+last_error = ""
 
 
 class STATUS:
@@ -143,6 +146,25 @@ class BackgroundProcess:
             self.process = None
 
     def _start_and_watch(self):
+        global last_error
+        try:
+            connected = self._start_and_connect()
+        except Exception as error:
+            # 別スレッドの例外は黙って消えてしまい、原因が分からないまま起動中のままになるため記録する
+            last_error = f"{type(error).__name__}: {error}"
+            addon_print("Could not start the background process:\n" + traceback.format_exc())
+            self._on_unexpected_exit()
+            return
+        if connected:
+            self._watch()
+
+    def _start_and_connect(self):
+        """
+        ### _start_and_connect
+        裏プロセスを起動して接続を待つ
+
+        @returns 接続できたら True。待っている間に停止・終了した場合は False
+        """
         authkey = current_process().authkey
 
         port = 6000
@@ -198,8 +220,8 @@ class BackgroundProcess:
             self.connection = self.listener.accept()
         except OSError:
             # 停止処理、または裏プロセスの終了で listener が閉じられた
-            return
-        self._watch()
+            return False
+        return True
 
     def _wait_for_exit(self):
         process = self.process
@@ -208,6 +230,7 @@ class BackgroundProcess:
             self._on_unexpected_exit()
 
     def _on_unexpected_exit(self):
+        global last_error
         with send_lock:
             # 受信スレッドと終了待ちスレッドの両方から呼ばれ得るため、最初の 1 回だけ処理する
             if self._stop_event.is_set():
@@ -226,7 +249,13 @@ class BackgroundProcess:
                     closable.close()
             except OSError:
                 pass
-        addon_print("Background process exited unexpectedly")
+        exit_code = self.process.poll() if self.process else None
+        if exit_code is not None:
+            last_error = f"Background process exited with code {exit_code}"
+            addon_print(
+                f"Background process exited unexpectedly (exit code {exit_code}). "
+                "Enable Debug Output in the add-on preferences to see its log"
+            )
         on_process_crashed()
 
     def _watch(self):
@@ -241,21 +270,31 @@ class BackgroundProcess:
                 self._on_unexpected_exit()
                 return
 
-            if tag == messages.BACKGROUND_PROCESS_READY:
-                # ジョブより先に届かないと全てのジョブが古い .blend 用として捨てられるため、最初に送る
-                self.send(messages.NEW_BLEND_ABSPATH, current_blend_abspath)
-                self.ready = True
-                # Force one refresh to render all nodes that are currently visible
-                force_node_editor_draw(("WINDOW", "HEADER"))
-                dispatch_jobs()
-            elif tag == messages.JOB_DONE:
+            try:
+                self._handle_message(tag, data)
+            except Exception:
+                # 1 件の処理に失敗しても受信は続ける（スレッドごと止まると以降の結果を受け取れなくなる）
+                addon_print("Error while handling a message from the background process:\n" + traceback.format_exc())
+
+    def _handle_message(self, tag, data):
+        if tag == messages.BACKGROUND_PROCESS_READY:
+            # ジョブより先に届かないと全てのジョブが古い .blend 用として捨てられるため、最初に送る
+            self.send(messages.NEW_BLEND_ABSPATH, current_blend_abspath)
+            self.ready = True
+            # Force one refresh to render all nodes that are currently visible
+            force_node_editor_draw(("WINDOW", "HEADER"))
+            dispatch_jobs()
+        elif tag == messages.JOB_DONE:
+            try:
                 on_job_done(data)
+            finally:
+                # 結果の処理に失敗しても、処理中のままにすると以降のジョブが送られなくなる
                 self._finish_job()
-            elif tag == messages.JOB_SKIPPED:
-                self._finish_job()
-            elif tag == messages.IMAGES_FAILED_TO_LINK:
-                with images_failed_to_link_lock:
-                    images_failed_to_link.update(data)
+        elif tag == messages.JOB_SKIPPED:
+            self._finish_job()
+        elif tag == messages.IMAGES_FAILED_TO_LINK:
+            with images_failed_to_link_lock:
+                images_failed_to_link.update(data)
 
     def _finish_job(self):
         with send_lock:
@@ -419,8 +458,9 @@ def restart_processes():
     ### restart_processes
     裏プロセスを全て止めてから 1 つ起動し直す（最大数の変更時や、ユーザーによる再起動）
     """
-    global gave_up_restarting
+    global gave_up_restarting, last_error
     gave_up_restarting = False
+    last_error = ""
     crash_times.clear()
     stop_threads_and_process()
     preview_cache.cached_nodes.clear()

@@ -48,6 +48,10 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
         if background_client.get_status() == background_client.STATUS.STOPPED:
             box = layout.box()
             box.label(text="Preview rendering has stopped", icon="ERROR")
+            if background_client.last_error:
+                # 例外の文面は訳せないため、翻訳の対象から外す
+                box.label(text=background_client.last_error, translate=False)
+            box.label(text="See the system console for details")
             box.operator(NODEPREVIEW_OPTIMIZ_OT_restart_background.bl_idname, icon="FILE_REFRESH")
 
         layout.separator()

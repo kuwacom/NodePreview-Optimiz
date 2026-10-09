@@ -153,6 +153,7 @@ TRANSLATIONS = {
     ): "サムネイルをレンダリングする裏プロセスを起動し直します",
     (DEFAULT, "Preview rendering has stopped"): "プレビューのレンダリングが停止しました",
     (DEFAULT, "Preview stopped"): "プレビュー停止中",
+    (DEFAULT, "See the system console for details"): "詳しくはシステムコンソールを確認してください",
     (OPERATOR, "Open Preferences"): "設定を開く",
     (DEFAULT, f"Open the {ADDON_NAME} addon user preferences"): f"{ADDON_NAME} のアドオン設定を開きます",
     (DEFAULT, "No nodes selected"): "ノードが選択されていません",
