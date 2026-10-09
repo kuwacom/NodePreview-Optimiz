@@ -22,6 +22,15 @@ from bpy.props import BoolProperty, EnumProperty, IntProperty, PointerProperty
 
 from .lib.constants import ADDON_NAME, PROP_NAME
 
+# 保存済みの .blend の値が変わらないよう、既存の番号は変えずに後ろへ追加する
+PREVIEW_OBJECT_ITEMS = (
+    ("AUTO", "Auto", "Use the surface preview shape for surface (BxDF) nodes, plane for everything else", "AUTO", 2),
+    ("PLANE", "Plane", "Flat Plane", "MESH_PLANE", 0),
+    ("SPHERE", "Sphere", "Sphere", "MESH_UVSPHERE", 1),
+    ("CUBE", "Cube", "Cube", "MESH_CUBE", 3),
+    ("MONKEY", "Monkey", "Monkey (Suzanne)", "MESH_MONKEY", 4),
+)
+
 
 class NodePreviewOptimizNodeSettings(bpy.types.PropertyGroup):
     """
@@ -39,15 +48,7 @@ class NodePreviewOptimizNodeSettings(bpy.types.PropertyGroup):
         default=True, name="Auto", description="Use the first output with an outgoing connection"
     )
     output_index: IntProperty(default=0, min=0)
-    preview_object: EnumProperty(
-        name="Preview Object",
-        items=(
-            ("PLANE", "Plane", "Flat Plane", 0),
-            ("SPHERE", "Sphere", "Sphere", 1),
-            ("AUTO", "Auto", "Use sphere for surface (BxDF) nodes, plane for everything else", 2),
-        ),
-        default="AUTO",
-    )
+    preview_object: EnumProperty(name="Preview Object", items=PREVIEW_OBJECT_ITEMS, default="AUTO")
 
     def is_enabled(self, addon_preferences):
         if self.enabled_modified:

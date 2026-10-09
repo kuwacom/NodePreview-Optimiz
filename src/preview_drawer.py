@@ -37,13 +37,13 @@ from .lib.node_utils import (
     SCALE_HELP_THRESHOLDS,
     UnsupportedNodeException,
     get_node_settings,
+    get_preview_shape,
     get_tree_settings,
     is_node_enabled,
     is_node_supported,
     make_node_key,
     make_tree_key_suffix,
     needs_more_than_1_sample,
-    needs_sphere_preview,
     sort_topologically,
 )
 from .thumbnail import draw_text
@@ -224,10 +224,10 @@ def handler():
             if not is_node_enabled(node, enabled_by_default):
                 continue
 
-            use_sphere_preview = needs_sphere_preview(node)
-            needs_more_samples = needs_more_than_1_sample(node, use_sphere_preview)
+            preview_shape = get_preview_shape(node, preferences.surface_preview_shape)
+            needs_more_samples = needs_more_than_1_sample(node, preview_shape != "PLANE")
 
-            scene_script = scene_converter.scene_to_script(context, needs_more_samples, use_sphere_preview)
+            scene_script = scene_converter.scene_to_script(context, needs_more_samples, preview_shape)
             script_hash = hash(node_script + scene_script)
             node_key = make_node_key(node, node_tree, node_tree_owner)
 

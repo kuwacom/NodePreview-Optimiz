@@ -19,7 +19,7 @@
 
 import bpy
 
-from .constants import PROP_NAME
+from .constants import PREVIEW_SHAPE_OBJECTS, PROP_NAME
 
 UNSUPPORTED_NODES = {
     "NodeReroute",
@@ -113,36 +113,43 @@ def is_node_enabled(node, enabled_by_default):
     return settings.enabled if settings.enabled_modified else enabled_by_default
 
 
-def needs_sphere_preview(node):
+def is_surface_node(node):
     """
-    ### needs_sphere_preview
-    @param node - 判定するノード
-    @returns 平面ではなく球でプレビューすべきなら True
+    ### is_surface_node
+    @returns シェーダー（BSDF など）を出力するノード、またはそれを含むグループなら True
     """
-    preview_object = get_node_settings(node).preview_object
-    if preview_object == "AUTO":
-        bl_idname = node.bl_idname
-
-        if bl_idname == "ShaderNodeGroup" and node.node_tree:
-            for subnode in node.node_tree.nodes:
-                if needs_sphere_preview(subnode):
-                    return True
-
-        return bl_idname.startswith("ShaderNodeBsdf") or bl_idname in SPHERE_PREVIEW_NODES
-    elif preview_object == "SPHERE":
-        return True
-    elif preview_object == "PLANE":
-        return False
-    else:
-        raise NotImplementedError("Unknown preview_object value")
-
-
-def needs_more_than_1_sample(node, use_sphere_preview):
     bl_idname = node.bl_idname
 
     if bl_idname == "ShaderNodeGroup" and node.node_tree:
         for subnode in node.node_tree.nodes:
-            if needs_more_than_1_sample(subnode, use_sphere_preview):
+            if is_surface_node(subnode):
+                return True
+
+    return bl_idname.startswith("ShaderNodeBsdf") or bl_idname in SPHERE_PREVIEW_NODES
+
+
+def get_preview_shape(node, surface_shape):
+    """
+    ### get_preview_shape
+    @param node - 判定するノード
+    @param surface_shape - Auto の時にシェーダー系のノードで使う形状（アドオン設定）
+    @returns PREVIEW_SHAPE_OBJECTS のキーのいずれか
+    """
+    preview_object = get_node_settings(node).preview_object
+    if preview_object == "AUTO":
+        return surface_shape if is_surface_node(node) else "PLANE"
+    elif preview_object in PREVIEW_SHAPE_OBJECTS:
+        return preview_object
+    else:
+        raise NotImplementedError("Unknown preview_object value")
+
+
+def needs_more_than_1_sample(node, is_3d_preview):
+    bl_idname = node.bl_idname
+
+    if bl_idname == "ShaderNodeGroup" and node.node_tree:
+        for subnode in node.node_tree.nodes:
+            if needs_more_than_1_sample(subnode, is_3d_preview):
                 return True
 
     if bl_idname == "ShaderNodeBsdfTransparent":
@@ -153,7 +160,7 @@ def needs_more_than_1_sample(node, use_sphere_preview):
 
     # In sphere mode, an area light prevents these from being noise-free at 1 sample
     # 4.0 で Glossy BSDF は ShaderNodeBsdfAnisotropic に統合された
-    if not use_sphere_preview and bl_idname in {"ShaderNodeBsdfDiffuse", "ShaderNodeBsdfAnisotropic"}:
+    if not is_3d_preview and bl_idname in {"ShaderNodeBsdfDiffuse", "ShaderNodeBsdfAnisotropic"}:
         roughness_input = node.inputs["Roughness"]
         # At roughness = 0, there's no noise with 1 sample
         return roughness_input.is_linked or roughness_input.default_value > 0

@@ -43,6 +43,15 @@ TEMP_DIR_PREFIX = "BlenderNodePreviewOptimiz_"
 TEMP_DIR_REGEX_PATTERN = TEMP_DIR_PREFIX + r"[0-9]+"
 
 
+# プレビューの形状 : プレビュー用シーン内のオブジェクト名（Cube と Monkey は裏プロセスの起動時に作る）
+PREVIEW_SHAPE_OBJECTS = {
+    "PLANE": "Plane",
+    "SPHERE": "Sphere",
+    "CUBE": "Cube",
+    "MONKEY": "Monkey",
+}
+
+
 class BACKGROUND_PATTERNS:
     CHECKER = "CHECKER"
     WHITE = "WHITE"

@@ -17,18 +17,20 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import math
 import os
 import queue
 import threading
 from multiprocessing.connection import Client
 from time import perf_counter, time
 
+import bmesh
 import bpy
 import numpy as np
 from bpy_extras.image_utils import load_image
 
 from .lib import messages
-from .lib.constants import ID_PREFIX, THUMB_CHANNEL_COUNT
+from .lib.constants import ID_PREFIX, PREVIEW_SHAPE_OBJECTS, THUMB_CHANNEL_COUNT
 from .lib.image_utils import get_image_linking_info
 from .lib.logger import background_print
 
@@ -174,8 +176,61 @@ def watcher_func(wakeup_condition, port, authkey):
         wakeup_condition.notify()
 
 
+def _add_shape_object(name, build_mesh, rotation, scale, smooth, rotation_mode="XYZ"):
+    bm = bmesh.new()
+    # 画像テクスチャのプレビューに必要なので、作成時に UV も作る
+    bm.loops.layers.uv.new()
+    build_mesh(bm)
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    for polygon in mesh.polygons:
+        polygon.use_smooth = smooth
+
+    template = bpy.data.objects["Sphere"]
+    shape_object = bpy.data.objects.new(name, mesh)
+    shape_object.location = template.location
+    shape_object.rotation_mode = rotation_mode
+    shape_object.rotation_euler = rotation
+    shape_object.scale = (scale, scale, scale)
+    shape_object.data.materials.append(bpy.data.materials["Material"])
+    shape_object.hide_render = True
+    bpy.context.scene.collection.objects.link(shape_object)
+    return shape_object
+
+
+def create_preview_shapes():
+    """
+    ### create_preview_shapes
+    プレビュー用シーンに無い形状（立方体・モンキー）を作る
+    """
+    # previewscene.blend を書き換えずに済むよう、起動のたびに作る
+    # カメラは真上からの平行投影のため、立体に見えるよう斜めに傾ける
+    _add_shape_object(
+        PREVIEW_SHAPE_OBJECTS["CUBE"],
+        lambda bm: bmesh.ops.create_cube(bm, size=1.0, calc_uvs=True),
+        # Z で 45 度回してから X で倒し、角をカメラに向けて 3 面が見えるようにする
+        # ライトは右上にあるため、上側に倒して見える面を明るくする
+        (math.radians(-54.736), 0.0, math.radians(45.0)),
+        1.1,
+        smooth=False,
+        rotation_mode="ZXY",
+    )
+    monkey = _add_shape_object(
+        PREVIEW_SHAPE_OBJECTS["MONKEY"],
+        lambda bm: bmesh.ops.create_monkey(bm, calc_uvs=True),
+        (math.radians(-60.0), 0.0, 0.0),
+        0.65,
+        smooth=True,
+    )
+    subdivision = monkey.modifiers.new("Subdivision", "SUBSURF")
+    subdivision.levels = subdivision.render_levels = 1
+
+
 def run(port, authkey):
     global free_requested
+
+    create_preview_shapes()
 
     wakeup_condition = threading.Condition()
 

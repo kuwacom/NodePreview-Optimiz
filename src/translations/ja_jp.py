@@ -104,8 +104,16 @@ TRANSLATIONS = {
     ): "Shift+O: アクティブなノードで、プレビューに使う出力を選ぶ",
     (
         DEFAULT,
-        "Ctrl+P: Switch between a flat plane and a 3D sphere as preview object on selected nodes",
-    ): "Ctrl+P: 選択中のノードのプレビューを平面と球で切り替える",
+        "Ctrl+P: Cycle the preview shape (plane, sphere, cube, monkey) on selected nodes",
+    ): "Ctrl+P: 選択中のノードのプレビューの形状を切り替える（平面・球・立方体・モンキー）",
+    (DEFAULT, "Surface Preview Shape"): "シェーダーのプレビュー形状",
+    (
+        DEFAULT,
+        "Shape used for surface (BxDF) nodes when their preview object is set to Auto",
+    ): "プレビューの形状が「自動」のとき、サーフェス（BxDF）のノードに使う形状",
+    (DEFAULT, "Monkey"): "モンキー",
+    (DEFAULT, "Monkey (Suzanne)"): "モンキー（Suzanne）",
+    (DEFAULT, "Preview Shape:"): "プレビューの形状:",
     (
         DEFAULT,
         "(These shortcuts can be changed in the Keymap settings)",
@@ -117,8 +125,8 @@ TRANSLATIONS = {
     (DEFAULT, "Flat Plane"): "平らな面",
     (
         DEFAULT,
-        "Use sphere for surface (BxDF) nodes, plane for everything else",
-    ): "サーフェス（BxDF）のノードは球、それ以外は平面を使います",
+        "Use the surface preview shape for surface (BxDF) nodes, plane for everything else",
+    ): "サーフェス（BxDF）のノードは「シェーダーのプレビュー形状」、それ以外は平面を使います",
     (DEFAULT, "Show Previews"): "プレビューを表示",
     (
         DEFAULT,
@@ -144,8 +152,13 @@ TRANSLATIONS = {
     (OPERATOR, "Change Preview Object"): "プレビューの形状を切り替え",
     (
         DEFAULT,
-        "On selected nodes: Change preview object between plane and sphere",
-    ): "選択中のノード: プレビューの形状を平面と球で切り替えます",
+        "On selected nodes: Cycle the preview shape between plane, sphere, cube and monkey",
+    ): "選択中のノード: プレビューの形状を平面・球・立方体・モンキーの順に切り替えます",
+    (OPERATOR, "Set Preview Shape"): "プレビューの形状を設定",
+    (
+        DEFAULT,
+        "On selected nodes: Set the shape used for the preview",
+    ): "選択中のノード: プレビューに使う形状を設定します",
     (OPERATOR, "Restart Preview Rendering"): "プレビューのレンダリングを再起動",
     (
         DEFAULT,

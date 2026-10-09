@@ -28,6 +28,7 @@ from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_open_preferences,
     NODEPREVIEW_OPTIMIZ_OT_restart_background,
     NODEPREVIEW_OPTIMIZ_OT_set_output,
+    NODEPREVIEW_OPTIMIZ_OT_set_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
 )
 
@@ -56,7 +57,7 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
 
         layout.separator()
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_toggle_preview.bl_idname)
-        layout.operator(NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object.bl_idname)
+        draw_shape_buttons(layout, icon_only=True)
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_set_output.bl_idname)
 
         preferences = get_preferences(context)
@@ -65,7 +66,20 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
         layout.prop(preferences, "thumb_scale")
         layout.prop(preferences, "thumb_z_offset")
         layout.prop(preferences, "previews_enabled_by_default")
+        layout.prop(preferences, "surface_preview_shape")
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_open_preferences.bl_idname, icon="PREFERENCES")
+
+
+def draw_shape_buttons(layout, icon_only):
+    """
+    ### draw_shape_buttons
+    選択中のノードのプレビュー形状を 1 クリックで設定するボタンを並べる
+    """
+    col = layout.column(align=True)
+    col.label(text="Preview Shape:")
+    row = col.row(align=True)
+    row.operator_enum(NODEPREVIEW_OPTIMIZ_OT_set_preview_object.bl_idname, "shape", icon_only=icon_only)
+    col.operator(NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object.bl_idname, icon="FILE_REFRESH")
 
 
 def draw_node_header_menu(self, context):
@@ -114,7 +128,7 @@ class NODEPREVIEW_OPTIMIZ_PT_node_tools(bpy.types.Panel, NodePreviewOptimizSideb
     def draw(self, context):
         layout = self.layout
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_toggle_preview.bl_idname)
-        layout.operator(NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object.bl_idname)
+        draw_shape_buttons(layout, icon_only=True)
 
 
 classes = (

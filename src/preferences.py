@@ -67,6 +67,17 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         name="Vertical Offset", default=5, min=0, max=50, description="Vertical offset of the thumbnails from the node"
     )
 
+    surface_preview_shape: EnumProperty(
+        name="Surface Preview Shape",
+        items=(
+            ("SPHERE", "Sphere", "Sphere", "MESH_UVSPHERE", 0),
+            ("CUBE", "Cube", "Cube", "MESH_CUBE", 1),
+            ("MONKEY", "Monkey", "Monkey (Suzanne)", "MESH_MONKEY", 2),
+        ),
+        default="SPHERE",
+        description="Shape used for surface (BxDF) nodes when their preview object is set to Auto",
+    )
+
     def update_max_background_processes(self, context):
         # 裏プロセスは UI のある Blender でだけ動かすため、設定画面から変更された時にだけ読み込む
         from . import background_client
@@ -147,6 +158,7 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         row.prop(self, "thumb_z_offset")
         row.prop(self, "thumb_resolution")
 
+        layout.prop(self, "surface_preview_shape")
         layout.prop(self, "max_background_processes")
 
         row = layout.row()
@@ -172,7 +184,7 @@ class NodePreviewOptimizPreferences(AddonPreferences):
         col.label(text="Ctrl+Shift+P: Toggle thumbnail visibility on selected nodes")
         col.label(text="Ctrl+Shift+i: Toggle wether to ignore the Scale socket on selected procedural texture nodes")
         col.label(text="Shift+O: Set the output to show in the preview thumbnail for the active node")
-        col.label(text="Ctrl+P: Switch between a flat plane and a 3D sphere as preview object on selected nodes")
+        col.label(text="Ctrl+P: Cycle the preview shape (plane, sphere, cube, monkey) on selected nodes")
         col.label(text="(These shortcuts can be changed in the Keymap settings)")
 
 

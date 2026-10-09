@@ -114,6 +114,7 @@ def make_update_signature(context, node_tree, node_tree_hierarchy, node_tree_own
         context.scene.render.engine,
         preferences.previews_enabled_by_default,
         preferences.thumb_resolution,
+        preferences.surface_preview_shape,
         preferences.background_pattern,
         tuple(preferences.background_color_1),
         tuple(preferences.background_color_2),

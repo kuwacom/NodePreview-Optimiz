@@ -29,7 +29,11 @@ from .lib.editor_utils import (
     poll_node_tree,
 )
 from .lib.i18n import iface_, rpt_, tip_
-from .lib.node_utils import get_node_settings, needs_sphere_preview
+from .lib.node_utils import get_node_settings, get_preview_shape
+from .properties import PREVIEW_OBJECT_ITEMS
+
+# Ctrl+P で切り替える順番
+PREVIEW_SHAPE_CYCLE = ("PLANE", "SPHERE", "CUBE", "MONKEY")
 
 
 def get_selected_nodes(context):
@@ -183,7 +187,7 @@ class NODEPREVIEW_OPTIMIZ_OT_set_output(bpy.types.Operator):
 class NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object(bpy.types.Operator):
     bl_idname = f"{ID_PREFIX}.cycle_preview_object"
     bl_label = "Change Preview Object"
-    bl_description = "On selected nodes: Change preview object between plane and sphere"
+    bl_description = "On selected nodes: Cycle the preview shape between plane, sphere, cube and monkey"
     bl_options = {"UNDO"}
 
     @classmethod
@@ -197,11 +201,10 @@ class NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object(bpy.types.Operator):
             self.report({"ERROR"}, rpt_("No nodes selected"))
             return {"CANCELLED"}
 
-        if any(needs_sphere_preview(node) for node in selection):
-            # At least one node was showing a sphere preview
-            new_state = "PLANE"
-        else:
-            new_state = "SPHERE"
+        # アクティブ（無ければ先頭）のノードの今の形状を基準に、全員を次の形状へ揃える
+        reference = context.active_node if context.active_node in selection else selection[0]
+        current = get_preview_shape(reference, get_preferences(context).surface_preview_shape)
+        new_state = PREVIEW_SHAPE_CYCLE[(PREVIEW_SHAPE_CYCLE.index(current) + 1) % len(PREVIEW_SHAPE_CYCLE)]
 
         for node in selection:
             get_node_settings(node).preview_object = new_state
@@ -210,8 +213,35 @@ class NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class NODEPREVIEW_OPTIMIZ_OT_set_preview_object(bpy.types.Operator):
+    bl_idname = f"{ID_PREFIX}.set_preview_object"
+    bl_label = "Set Preview Shape"
+    bl_description = "On selected nodes: Set the shape used for the preview"
+    bl_options = {"UNDO"}
+
+    shape: EnumProperty(name="Shape", items=PREVIEW_OBJECT_ITEMS)
+
+    @classmethod
+    def poll(cls, context):
+        return poll_node_tree(context)
+
+    def execute(self, context):
+        selection = get_selected_nodes(context)
+
+        if not selection:
+            self.report({"ERROR"}, rpt_("No nodes selected"))
+            return {"CANCELLED"}
+
+        for node in selection:
+            get_node_settings(node).preview_object = self.shape
+
+        force_node_editor_draw()
+        return {"FINISHED"}
+
+
 classes = (
     NODEPREVIEW_OPTIMIZ_OT_open_preferences,
+    NODEPREVIEW_OPTIMIZ_OT_set_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_restart_background,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
     NODEPREVIEW_OPTIMIZ_OT_toggle_ignore_scale,
