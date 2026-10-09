@@ -608,7 +608,8 @@ def register():
         register_class(NodePreviewAddonPreferences)
         from . import background
     else:
-        bpy.app.timers.register(_deferred_register, first_interval=0.3)
+        # persistent=True にしないと起動直後の .blend 読み込みでタイマーが破棄され、登録が行われない
+        bpy.app.timers.register(_deferred_register, first_interval=0.3, persistent=True)
 
 
 def unregister():

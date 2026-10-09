@@ -786,6 +786,9 @@ def display_register():
     process_starter.setDaemon(True)
     process_starter.start()
 
+    # 遅延登録のため load_post を取り逃しており、blend のパスが裏プロセスに伝わらず全ジョブが破棄されてしまう
+    update_blend_path()
+
 
 def display_unregister():
     SpaceNodeEditor.draw_handler_remove(handle, "WINDOW")
