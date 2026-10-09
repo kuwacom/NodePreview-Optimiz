@@ -1,5 +1,7 @@
 # NodePreview-Optimiz
 
+日本語 | [English](README.en.md)
+
 Blender のシェーダーノードの上に、レンダリングしたプレビュー画像（サムネイル）を表示するアドオンです
 
 ![NodePreview-Optimiz のスクリーンショット](./images/preview.png)
