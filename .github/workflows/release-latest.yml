@@ -54,3 +54,21 @@ jobs:
 
           Blender の **編集 > プリファレンス > アドオン** の右上のメニューにある **ディスクからインストール...** で、この zip をそのまま選んでください。" \
             --latest
+
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # blender_manifest.toml のバージョンを上げた時だけ作る。公開済みのバージョンは上書きしない
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "v$VERSION is already released, skipping"
+            exit 0
+          fi
+          versioned_zip="dist/NodePreview-Optimiz-v$VERSION.zip"
+          cp "dist/$ZIP_NAME" "$versioned_zip"
+          gh release create "v$VERSION" "$versioned_zip" \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --generate-notes \
+            --latest=false
