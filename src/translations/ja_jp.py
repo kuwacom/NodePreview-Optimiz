@@ -150,7 +150,9 @@ TRANSLATIONS = {
     ): "プレビューの形状が「自動」のとき、サーフェス（BxDF）のノードに使う形状",
     (DEFAULT, "Monkey"): "モンキー",
     (DEFAULT, "Monkey (Suzanne)"): "モンキー（Suzanne）",
-    (DEFAULT, "Preview Shape:"): "プレビューの形状:",
+    (DEFAULT, "Preview Shape: {}"): "プレビューの形状: {}",
+    (DEFAULT, "Auto ({})"): "自動（{}）",
+    (DEFAULT, "Mixed"): "混在",
     (
         DEFAULT,
         "(These shortcuts can be changed in the Keymap settings)",

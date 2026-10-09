@@ -22,7 +22,8 @@ import bpy
 from . import background_client
 from .lib.constants import ADDON_NAME
 from .lib.editor_utils import get_edited_node_tree, get_preferences, poll_node_tree
-from .lib.node_utils import get_tree_settings
+from .lib.i18n import iface_
+from .lib.node_utils import get_node_settings, get_preview_shape, get_tree_settings
 from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_open_preferences,
@@ -31,7 +32,9 @@ from .operators import (
     NODEPREVIEW_OPTIMIZ_OT_set_output,
     NODEPREVIEW_OPTIMIZ_OT_set_preview_object,
     NODEPREVIEW_OPTIMIZ_OT_toggle_preview,
+    get_selected_nodes,
 )
+from .properties import PREVIEW_OBJECT_ITEMS
 from .zoom_view import NODEPREVIEW_OPTIMIZ_OT_zoom_preview
 
 
@@ -60,7 +63,7 @@ class NODEPREVIEW_OPTIMIZ_PT_header_popover(bpy.types.Panel):
         layout.separator()
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_toggle_preview.bl_idname)
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_zoom_preview.bl_idname, icon="ZOOM_IN")
-        draw_shape_buttons(layout, icon_only=True)
+        draw_shape_buttons(layout, context)
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_set_output.bl_idname)
 
         preferences = get_preferences(context)
@@ -85,15 +88,47 @@ def draw_update_controls(layout, preferences):
     row.operator(NODEPREVIEW_OPTIMIZ_OT_refresh_previews.bl_idname, icon="FILE_REFRESH")
 
 
-def draw_shape_buttons(layout, icon_only):
+def get_selected_preview_object(context):
+    """
+    ### get_selected_preview_object
+    @returns (選択中のノードの preview_object, 代表のノード)。設定が混在していれば ("MIXED", 代表), 選択が無ければ (None, None)
+    """
+    selection = get_selected_nodes(context)
+    if not selection:
+        return None, None
+    values = {get_node_settings(node).preview_object for node in selection}
+    reference = context.active_node if context.active_node in selection else selection[0]
+    return (values.pop() if len(values) == 1 else "MIXED"), reference
+
+
+def draw_shape_buttons(layout, context):
     """
     ### draw_shape_buttons
-    選択中のノードのプレビュー形状を 1 クリックで設定するボタンを並べる
+    選択中のノードのプレビュー形状を 1 クリックで設定するボタンを並べ、今の形状を押された状態で示す
     """
+    current, reference = get_selected_preview_object(context)
+    item_names = {identifier: name for identifier, name, *_ in PREVIEW_OBJECT_ITEMS}
+
+    if current is None:
+        status = iface_("No nodes selected")
+    elif current == "MIXED":
+        status = iface_("Mixed")
+    elif current == "AUTO":
+        # 自動の時は、実際にどの形状で描かれるかも分かるようにする
+        resolved = get_preview_shape(reference, get_preferences(context).surface_preview_shape)
+        status = iface_("Auto ({})").format(iface_(item_names[resolved]))
+    else:
+        status = iface_(item_names[current])
+
     col = layout.column(align=True)
-    col.label(text="Preview Shape:")
+    # 訳した後の文字列が再度翻訳の対象にならないよう translate=False にする
+    col.label(text=iface_("Preview Shape: {}").format(status), translate=False)
     row = col.row(align=True)
-    row.operator_enum(NODEPREVIEW_OPTIMIZ_OT_set_preview_object.bl_idname, "shape", icon_only=icon_only)
+    for identifier, _name, _description, icon, _value in PREVIEW_OBJECT_ITEMS:
+        operator = row.operator(
+            NODEPREVIEW_OPTIMIZ_OT_set_preview_object.bl_idname, text="", icon=icon, depress=current == identifier
+        )
+        operator.shape = identifier
     col.operator(NODEPREVIEW_OPTIMIZ_OT_cycle_preview_object.bl_idname, icon="FILE_REFRESH")
 
 
@@ -150,7 +185,7 @@ class NODEPREVIEW_OPTIMIZ_PT_node_tools(bpy.types.Panel, NodePreviewOptimizSideb
         layout = self.layout
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_toggle_preview.bl_idname)
         layout.operator(NODEPREVIEW_OPTIMIZ_OT_zoom_preview.bl_idname, icon="ZOOM_IN")
-        draw_shape_buttons(layout, icon_only=True)
+        draw_shape_buttons(layout, context)
 
 
 classes = (
