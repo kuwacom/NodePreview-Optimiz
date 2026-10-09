@@ -98,8 +98,8 @@ def watcher_func(wakeup_condition, port, authkey):
 
                 while not results.empty():
                     try:
-                        result = results.get(block=False)
-                        connection.send((messages.JOB_DONE, result))
+                        # (JOB_DONE, 結果) または (JOB_SKIPPED, node_key)
+                        connection.send(results.get(block=False))
                     except queue.Empty:
                         pass
 
@@ -149,7 +149,10 @@ def run(port, authkey):
             if success:
                 elapsed = perf_counter() - start
                 background_print(f"job done in {elapsed:.3f} s")
-                results.put(result)
+                results.put((messages.JOB_DONE, result))
+            else:
+                # メイン側は完了の通知を待って次のジョブを送るため、飛ばした場合も必ず知らせる
+                results.put((messages.JOB_SKIPPED, job[0]))
         except queue.Empty:
             continue
 

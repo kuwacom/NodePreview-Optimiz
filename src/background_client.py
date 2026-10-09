@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from collections import OrderedDict
 from multiprocessing import current_process
 from multiprocessing.connection import Connection, Listener
 from time import sleep, time
@@ -60,6 +61,13 @@ background_process: subprocess.Popen | None = None
 listener: Listener | None = None
 connection: Connection | None = None
 
+# 送信待ちのジョブ（node_key : job）。同じノードは最新のジョブだけを残し、最後に追加したものから送る
+pending_jobs = OrderedDict()
+# 裏プロセスが処理中のジョブがあるか。処理中は次のジョブを送らず、送信待ちの中で古いジョブを上書きさせる
+background_process_busy = False
+# 描画ハンドラー（メインスレッド）と WatcherThread の両方から送信するため、送信と送信待ちの操作をまとめて守る
+send_lock = threading.RLock()
+
 
 class WatcherThread(threading.Thread):
     """
@@ -88,6 +96,7 @@ class WatcherThread(threading.Thread):
                     background_process_ready = True
                     # Force one refresh to render all nodes that are currently visible
                     force_node_editor_draw()
+                    dispatch_jobs()
                 elif tag == messages.JOB_DONE:
                     node_key, result_array, thumb_resolution, job_timestamp, error_message, full_error_log = data
 
@@ -109,6 +118,9 @@ class WatcherThread(threading.Thread):
                         pass
 
                     force_node_editor_draw()
+                    on_job_finished()
+                elif tag == messages.JOB_SKIPPED:
+                    on_job_finished()
                 elif tag == messages.IMAGES_FAILED_TO_LINK:
                     with images_failed_to_link_lock:
                         images_failed_to_link.update(data)
@@ -125,19 +137,62 @@ def is_ready():
     return background_process_ready
 
 
-def send_job(job):
+def send_message(tag, data=None):
     """
-    ### send_job
-    サムネイル 1 枚分のレンダリングを裏プロセスに依頼する
+    ### send_message
+    裏プロセスにメッセージを送る（どのスレッドから呼んでも良い）
+    """
+    with send_lock:
+        connection.send((tag, data))
 
-    @param job - preview_drawer で組み立てたジョブ
+
+def submit_jobs(jobs):
     """
-    connection.send((messages.NEW_JOB, job))
+    ### submit_jobs
+    サムネイルのレンダリングを依頼する。同じノードの未送信のジョブは新しいもので置き換える
+
+    @param jobs - preview_drawer で組み立てたジョブ。後ろにあるものほど先に処理される
+    """
+    with send_lock:
+        for job in jobs:
+            node_key = job[0]
+            pending_jobs.pop(node_key, None)
+            pending_jobs[node_key] = job
+    dispatch_jobs()
+
+
+def dispatch_jobs():
+    """
+    ### dispatch_jobs
+    裏プロセスが空いていれば、送信待ちのジョブを 1 件送る
+    """
+    global background_process_busy
+    with send_lock:
+        if not background_process_ready or background_process_busy or not pending_jobs:
+            return
+        _, job = pending_jobs.popitem(last=True)
+        background_process_busy = True
+        send_message(messages.NEW_JOB, job)
+
+
+def on_job_finished():
+    global background_process_busy
+    with send_lock:
+        background_process_busy = False
+    dispatch_jobs()
+
+
+def clear_pending_jobs():
+    global background_process_busy
+    with send_lock:
+        pending_jobs.clear()
+        background_process_busy = False
 
 
 def stop_threads_and_process():
     global watcher_thread, connection, listener, background_process, background_process_ready
     background_process_ready = False
+    clear_pending_jobs()
 
     if watcher_thread:
         watcher_thread.stop()
@@ -145,7 +200,7 @@ def stop_threads_and_process():
         watcher_thread = None
 
     if connection:
-        connection.send((messages.STOP, None))
+        send_message(messages.STOP)
         connection.close()
         connection = None
 
@@ -185,7 +240,7 @@ def update_blend_path():
     def notify_new_blend_loaded():
         while not background_process_ready:
             sleep(1 / 60)
-        connection.send((messages.NEW_BLEND_ABSPATH, bpy.path.abspath(bpy.data.filepath)))
+        send_message(messages.NEW_BLEND_ABSPATH, bpy.path.abspath(bpy.data.filepath))
 
     if background_process_ready:
         notify_new_blend_loaded()
@@ -206,9 +261,12 @@ def force_update_failed_images(node_trees):
 @persistent
 def load_pre(_=None):
     preview_cache.free()
+    # 前の .blend 用のジョブは送っても裏プロセスで捨てられるだけなので、送る前に消す
+    with send_lock:
+        pending_jobs.clear()
     # Delete images in the background process to free up RAM
     if background_process_ready:
-        connection.send((messages.FREE_RESSOURCES, None))
+        send_message(messages.FREE_RESSOURCES)
 
 
 @persistent

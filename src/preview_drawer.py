@@ -355,8 +355,8 @@ def handler():
     gpu.shader.unbind()
 
     # Send jobs in reversed order so the leftmost node (which was edited) is rendered first for fast feedback
-    for job in reversed(jobs_to_send):
-        background_client.send_job(job)
+    if jobs_to_send:
+        background_client.submit_jobs(reversed(jobs_to_send))
 
     # elapsed = perf_counter() - __start
     # print("draw handler took %.3f s (%d fps)" % (elapsed, round(1 / elapsed)))

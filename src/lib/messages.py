@@ -26,3 +26,5 @@ BACKGROUND_PROCESS_READY = 4
 FREE_RESSOURCES = 5
 IMAGES_FAILED_TO_LINK = 6
 NEW_BLEND_ABSPATH = 7
+# 古いジョブなどを処理せずに飛ばしたことの通知。メイン側が次のジョブを送るきっかけにする
+JOB_SKIPPED = 8
